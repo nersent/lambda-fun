@@ -47,7 +47,8 @@ jobs:
 
       - name: Publish
         run: |
-          npm publish --dry-run
+          readonly VERSION_TAG=1.2.0
 
-        #|
-        # ./scripts/publish.sh
+          npm version $VERSION_TAG
+
+          npm publish --dry-run
