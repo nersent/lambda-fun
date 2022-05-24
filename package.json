@@ -14,7 +14,8 @@
     "dev": "tsc-watch -p ./tsconfig.examples.json --onSuccess \"node build/examples/index.js\"",
     "clean": "rimraf ./build",
     "build": "npm run clean && tsc -p ./tsconfig.lib.json",
-    "lint": "eslint ./"
+    "lint": "eslint ./",
+    "prepublishOnly": "npm run build"
   },
   "devDependencies": {
     "@types/node": "^17.0.35",
