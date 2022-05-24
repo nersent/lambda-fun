@@ -30,6 +30,14 @@ jobs:
           npm config set @nersent:registry https://npm.pkg.github.com
           npm config set -- '//npm.pkg.github.com:_authToken' "${{ secrets.NPM_TOKEN }}"
 
+      - name: Bump version
+        uses: pkgdeps/git-tag-action@v2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_repo: ${{ github.repository }}
+          git_commit_sha: ${{ github.sha }}
+          version: "1.0.0"
+
       - uses: actions/cache@v3.0.2
         id: yarn-cache
         with:
@@ -47,8 +55,11 @@ jobs:
 
       - name: Publish
         run: |
-          readonly VERSION_TAG=1.2.0
-
-          npm version $VERSION_TAG
+          cat package.json
 
           npm publish --dry-run
+        # readonly VERSION_TAG=1.2.0
+
+        # npm version $VERSION_TAG
+
+# $(git describe --abbrev=7 --tags HEAD)
