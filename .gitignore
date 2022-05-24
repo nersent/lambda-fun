@@ -1,0 +1,11 @@
+node_modules
+.dev
+.env
+build
+yarn-error.log
+.DS_STORE
+.old
+tmp
+.next
+.downloads
+tsconfig.tsbuildinfo
