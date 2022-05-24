@@ -7,6 +7,7 @@
     "build/src"
   ],
   "repository": "https://github.com/nersent/queue.git",
+  "homepage": "https://nersent.com",
   "author": "Mikołaj Palkiewicz <mikolaj@nersent.com>",
   "license": "MIT",
   "scripts": {
