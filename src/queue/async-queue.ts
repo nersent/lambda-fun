@@ -29,10 +29,15 @@ export type AsyncQueueEventRecorderType =
   | "empty-queue"
   | "no-executable-thread"
   | "before-execution"
+  | "execution-call"
+  | "execution-callback"
+  | "execution"
   | "after-execution"
   | "emit-resolve"
   | "clear-context-map"
-  | "cancel-remove-from-queue";
+  | "cancel-remove-from-queue"
+  | "clear"
+  | "tick-call";
 
 export interface AsyncQueueDelegates {
   readonly threadManager: IThreadManager;
@@ -42,10 +47,11 @@ export interface AsyncQueueDelegates {
 export interface AsyncQueueOptions {
   verbose?: boolean;
   printSteps?: boolean;
+  verbosePath?: string;
 }
 
 export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
-  private readonly queue: AsyncQueueEntry[] = [];
+  private queue: AsyncQueueEntry[] = [];
 
   private readonly contextMap = new Map<string, AsyncQueueExecutionContext>();
 
@@ -63,15 +69,25 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
     }
   }
 
+  public clear() {
+    this.eventRecorder?.register("clear");
+    this.queue = [];
+  }
+
   public getContext(id: string): AsyncQueueExecutionContext | undefined {
     return this.contextMap.get(id);
   }
 
-  public enqueue(data: any, opts?: QueueEnqueueOptions | undefined): string {
-    const id = makeId();
+  public enqueue(data: any, options?: QueueEnqueueOptions | undefined): string {
+    const id = options?.id ?? makeId();
     const entry: AsyncQueueEntry = { id, data };
-    this.eventRecorder?.register("enqueue", entry);
-    this.queue.push(entry);
+    this.eventRecorder?.register("enqueue", { entry, options });
+    if (options?.first) {
+      this.queue.unshift(entry);
+    } else {
+      this.queue.push(entry);
+    }
+    this.emit("enqueue", entry);
     return id;
   }
 
@@ -181,7 +197,7 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
 
       if (thread == null) {
         this.queue.unshift(entry);
-        this.eventRecorder?.register("no-executable-thread");
+        this.eventRecorder?.register("no-executable-thread", { entry });
         break;
       }
 
@@ -198,10 +214,14 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
   }
 
   protected executeOnThread(thread: IThread, ctx: AsyncQueueExecutionContext) {
+    this.eventRecorder?.register("execution-call", { ctx });
     thread
       .execute({
-        fn: () => {
-          return this.delegates.execute(ctx);
+        fn: async () => {
+          this.eventRecorder?.register("execution", { ctx });
+          const res = await this.delegates.execute(ctx);
+          this.eventRecorder?.register("execution-callback", { ctx, res });
+          return res;
         },
       })
       .then(async (res) => {
@@ -234,6 +254,7 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
 
         this.eventRecorder?.register("clear-context-map", { ctx });
         this.contextMap.delete(ctx.id);
+        this.eventRecorder?.register("tick-call", { ctx });
         this.tick();
       });
   }

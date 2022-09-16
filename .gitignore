@@ -9,3 +9,4 @@ tmp
 .next
 .downloads
 tsconfig.tsbuildinfo
+logs.json

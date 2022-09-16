@@ -5,11 +5,25 @@ import {
   AsyncQueueOptions,
 } from "../queue/async-queue";
 
-export interface ThreadifyOptions {
+export type ThreadifyOptions = {
   threads: number;
-  maxRetries?: number;
+  maxTries?: number;
   retryTimeout?: number;
-  queueOptions?: Partial<AsyncQueueOptions>;
+  timeLimit?: ThreadifyOptionsTimeLimit;
+  queueOptions?: Partial<AsyncQueueOptions & { verbosePath?: string }>;
+  printItemsOnError?: boolean;
+} & (
+  | {
+      rejectOnError?: boolean;
+    }
+  | {
+      exitProcessOnError?: boolean;
+    }
+);
+
+export interface ThreadifyOptionsTimeLimit {
+  time: number;
+  count: number;
 }
 
 interface ThreadifyExecutionContext extends AsyncQueueExecutionContext {
@@ -33,6 +47,8 @@ export const threadify = (
     await threadManager.setThreadsCount(options.threads);
 
     const items: any[] = [];
+    const tryCounter = new Map<string, number>();
+    let timeouts: NodeJS.Timeout[] = [];
 
     const queue = new AsyncQueue(
       {
@@ -44,14 +60,60 @@ export const threadify = (
       options?.queueOptions,
     );
 
+    const handleError = (error: any) => {
+      options?.printItemsOnError && console.log(items);
+
+      if ("rejectOnError" in options && options.rejectOnError) {
+        queue.clear();
+        reject(error);
+      } else if (
+        "exitProcessOnError" in options &&
+        options.exitProcessOnError
+      ) {
+        console.error(error);
+        process.exit(1);
+      }
+    };
+
     queue.on("resolve", (e) => {
+      const ctx = queue.getContext(e.id)!;
+
+      const currentTry = (tryCounter.get(ctx.id) ?? 0) + 1;
+      tryCounter.set(ctx.id, currentTry);
+
+      if (options.maxTries != null && "error" in e) {
+        if (currentTry >= options.maxTries) {
+          return handleError(
+            new Error(`Max tries (${options.maxTries}) exceeded.`),
+          );
+        } else {
+          if (options.retryTimeout != null && options.retryTimeout !== 0) {
+            const timeout = setTimeout(() => {
+              queue.enqueue(ctx.data, { id: ctx.id, first: true });
+              queue.tick();
+              timeouts = timeouts.filter((t) => t !== timeout);
+            }, options.retryTimeout ?? 0);
+            timeouts.push(timeout);
+          } else {
+            queue.enqueue(ctx.data, { id: ctx.id, first: true });
+          }
+          return;
+        }
+      }
+
+      if ("error" in e && !e.isCanceled) {
+        handleError(e.error);
+      }
+
       if ("data" in e) {
         items.push(e.data);
       }
     });
 
-    queue.once("finish", () => {
-      resolve(items);
+    queue.on("finish", () => {
+      if (timeouts.length === 0) {
+        resolve(items);
+      }
     });
 
     entries.forEach((entry) => {

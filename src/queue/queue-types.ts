@@ -29,11 +29,12 @@ export interface Queue extends Observable<QueueObserverMap> {
    * Processes the queue. You should at least call it once.
    */
   tick(): void;
+  clear(): void;
   exists(id: string): boolean;
 }
 
 export type QueueObserverMap = {
-  enqueue: (ctx: QueueExecutionContext) => Promise<void> | void;
+  enqueue: (data: any) => Promise<void> | void;
   pause: (id: string, reason?: any) => Promise<void> | void;
   resume: (id: string, reason?: any) => Promise<void> | void;
   cancel: (id: string, reason?: any) => Promise<void> | void;
@@ -79,4 +80,5 @@ export interface QueueEnqueueOptions {
    * If provided, the newly created task will have that id.
    */
   id?: string;
+  first?: boolean;
 }

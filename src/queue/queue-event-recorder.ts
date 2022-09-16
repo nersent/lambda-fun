@@ -18,7 +18,7 @@ export class QueueEventRecorder<T extends string> {
       event.data = data;
     }
     if (this.printWhenCreate) {
-      console.log(event);
+      console.log(JSON.stringify(event, null, 2));
     }
     this.events.push(event);
   }
