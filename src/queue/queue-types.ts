@@ -16,11 +16,11 @@ export interface Queue extends Observable<QueueObserverMap> {
   /**
    * Pauses one or multiple tasks. It does not pause running tasks.
    */
-  pause(ids: string | string[], reason?: any): Promise<void>;
+  pause(ids: string | string[], reason?: QueuePauseReason): Promise<void>;
   /**
    * Resumes one or multiple tasks.
    */
-  resume(ids: string | string[], reason?: any): Promise<void>;
+  resume(ids: string | string[], first?: boolean): Promise<void>;
   /**
    * Cancels one or multiple tasks.
    */
@@ -70,6 +70,8 @@ export class QueueCancelReason<T = any> extends Error {
   }
 }
 
+export class QueuePauseReason<T = any> extends QueueCancelReason<T> {}
+
 export interface QueueExecutionContext {
   id: string;
   threadId: string;
@@ -81,4 +83,5 @@ export interface QueueEnqueueOptions {
    */
   id?: string;
   first?: boolean;
+  isPaused?: boolean;
 }

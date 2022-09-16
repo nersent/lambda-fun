@@ -7,6 +7,7 @@ import {
   QueueEnqueueOptions,
   QueueExecutionContext,
   QueueObserverMap,
+  QueuePauseReason,
   QueueResolveEvent,
 } from "./queue-types";
 import { Observable } from "../utils/observable";
@@ -14,6 +15,7 @@ import { Observable } from "../utils/observable";
 export interface AsyncQueueEntry {
   id: string;
   data: any;
+  isPaused?: boolean;
 }
 
 export interface AsyncQueueExecutionContext extends QueueExecutionContext {
@@ -37,7 +39,10 @@ export type AsyncQueueEventRecorderType =
   | "clear-context-map"
   | "cancel-remove-from-queue"
   | "clear"
-  | "tick-call";
+  | "tick-call"
+  | "omit-paused"
+  | "resume"
+  | "tick-loop-break-pause";
 
 export interface AsyncQueueDelegates {
   readonly threadManager: IThreadManager;
@@ -80,7 +85,7 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
 
   public enqueue(data: any, options?: QueueEnqueueOptions | undefined): string {
     const id = options?.id ?? makeId();
-    const entry: AsyncQueueEntry = { id, data };
+    const entry: AsyncQueueEntry = { id, data, isPaused: options?.isPaused };
     this.eventRecorder?.register("enqueue", { entry, options });
     if (options?.first) {
       this.queue.unshift(entry);
@@ -91,12 +96,19 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
     return id;
   }
 
-  public pause(ids: string | string[], reason?: any): Promise<void> {
-    throw new Error("Method not implemented.");
+  public async pause(
+    ids: string | string[],
+    reason: QueuePauseReason = new QueueCancelReason(
+      `Operation ${ids} was paused`,
+    ),
+  ) {
+    if (!Array.isArray(ids)) ids = [ids];
+    await Promise.all(ids.map((id) => this._pause(id, reason)));
   }
 
-  public resume(ids: string | string[], reason?: any): Promise<void> {
-    throw new Error("Method not implemented.");
+  public async resume(ids: string | string[], first?: boolean) {
+    if (!Array.isArray(ids)) ids = [ids];
+    await Promise.all(ids.map((id) => this._resume(id, first)));
   }
 
   public async cancel(
@@ -104,8 +116,38 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
     reason: QueueCancelReason = new QueueCancelReason(
       `Operation ${ids} was canceled`,
     ),
-  ): Promise<void> {
-    const id = ids as string;
+  ) {
+    if (!Array.isArray(ids)) ids = [ids];
+    await Promise.all(ids.map((id) => this._cancel(id, reason)));
+  }
+
+  private async _resume(id: string, first?: boolean) {
+    const entryIndex = this.queue.findIndex((r) => r.id === id);
+    if (entryIndex === -1) throw new Error(`Entry ${id} not found`);
+
+    let entry: AsyncQueueEntry;
+
+    if (first) {
+      entry = this.queue.splice(entryIndex, 1)[0];
+      this.queue.unshift(entry);
+    } else {
+      entry = this.queue[entryIndex];
+    }
+
+    entry.isPaused = false;
+    this.eventRecorder?.register("resume", { entry, first });
+    this.tick();
+  }
+
+  private async _pause(id: string, reason: QueuePauseReason) {
+    const ctx = this.getContext(id);
+    if (ctx == null) throw new Error(`Context ${id} not found`);
+
+    await this._cancel(id, reason);
+    this.enqueue(ctx.data, { id: ctx.id, isPaused: true });
+  }
+
+  private async _cancel(id: string, reason: QueueCancelReason) {
     const ctx = this.getContext(id);
 
     if (ctx == null) {
@@ -191,6 +233,24 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
       if (entry == null) {
         this.eventRecorder?.register("empty-queue");
         break;
+      }
+
+      if (entry.isPaused) {
+        this.queue.push(entry);
+
+        if (this.queue.length === 1) {
+          this.eventRecorder?.register("tick-loop-break-pause", {
+            entry,
+            queue: this.queue,
+          });
+          break;
+        }
+
+        this.eventRecorder?.register("omit-paused", {
+          entry,
+          queue: this.queue,
+        });
+        continue;
       }
 
       const thread = this.delegates.threadManager.findExecutableThread({});

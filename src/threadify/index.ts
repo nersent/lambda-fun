@@ -65,11 +65,10 @@ export const threadify = (
 
       if ("rejectOnError" in options && options.rejectOnError) {
         queue.clear();
-        reject(error);
-      } else if (
-        "exitProcessOnError" in options &&
-        options.exitProcessOnError
-      ) {
+        return reject(error);
+      }
+
+      if ("exitProcessOnError" in options && options.exitProcessOnError) {
         console.error(error);
         process.exit(1);
       }
