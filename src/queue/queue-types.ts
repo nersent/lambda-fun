@@ -1,4 +1,6 @@
-export interface Queue {
+import { Observable } from "../utils/observable";
+
+export interface Queue extends Observable<QueueObserverMap> {
   /**
    * Enqueues single function and returns the handle.
    */
@@ -27,24 +29,22 @@ export interface Queue {
    * Processes the queue. You should at least call it once.
    */
   tick(): void;
-  addObserver(map: Partial<QueueObserverMap>): void;
-  removeObserver(map: Partial<QueueObserverMap>): void;
 }
 
 export type QueueObserverMap = {
-  onEnqueue: (ctx: QueueExecutionContext) => Promise<void> | void;
-  onPause: (id: string, reason?: any) => Promise<void> | void;
-  onResume: (id: string, reason?: any) => Promise<void> | void;
-  onCancel: (id: string, reason?: any) => Promise<void> | void;
-  onResolve: (e: QueueResolveEvent<any>) => Promise<void> | void;
+  enqueue: (ctx: QueueExecutionContext) => Promise<void> | void;
+  pause: (id: string, reason?: any) => Promise<void> | void;
+  resume: (id: string, reason?: any) => Promise<void> | void;
+  cancel: (id: string, reason?: any) => Promise<void> | void;
+  resolve: (e: QueueResolveEvent<any>) => Promise<void> | void;
   /**
    * Called when the queue is empty and there is no more items to process.
    */
-  onFinish: () => void;
+  finish: () => void;
 };
 
 export type QueueResolveEvent<T> =
-  | { contextId: string; queue: Queue } & (
+  | { contextId: string; queue: Queue; isCanceled: boolean } & (
       | {
           data: T;
         }
@@ -52,7 +52,7 @@ export type QueueResolveEvent<T> =
           error?: any;
         }
       | {
-          isCanceled: boolean;
+          isCanceled: true;
           cancelReason: QueueCancelReason;
         }
     );

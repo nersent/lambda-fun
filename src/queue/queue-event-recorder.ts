@@ -25,6 +25,5 @@ export class QueueEventRecorder<T extends string> {
 
   public print() {
     console.log(JSON.stringify(this.events, null, 2));
-    // console.log("%j", this.events);
   }
 }

@@ -14,14 +14,15 @@ import {
   QueueObserverMap,
   QueueResolveEvent,
 } from "./queue-types";
+import { Observable } from "../utils/observable";
 
 export interface AsyncQueueEntry {
   id: string;
-  data: Record<string, any>;
+  data: any;
 }
 
 export interface AsyncQueueExecutionContext extends QueueExecutionContext {
-  data: Record<string, any>;
+  data: any;
 }
 
 export type AsyncQueueEventRecorderType =
@@ -46,12 +47,10 @@ export interface AsyncQueueOptions {
   printSteps?: boolean;
 }
 
-export class AsyncQueue implements Queue {
+export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
   private readonly queue: AsyncQueueEntry[] = [];
 
   private readonly contextMap = new Map<string, AsyncQueueExecutionContext>();
-
-  private readonly observerManager = new ObserverManager<QueueObserverMap>();
 
   private readonly eventRecorder:
     | QueueEventRecorder<AsyncQueueEventRecorderType>
@@ -61,9 +60,10 @@ export class AsyncQueue implements Queue {
     private readonly delegates: AsyncQueueDelegates,
     private readonly options?: AsyncQueueOptions,
   ) {
-    this.eventRecorder = new QueueEventRecorder(
-      options?.verbose && options.printSteps,
-    );
+    super();
+    if (options?.verbose) {
+      this.eventRecorder = new QueueEventRecorder(options.printSteps);
+    }
   }
 
   public getContext(id: string): AsyncQueueExecutionContext | undefined {
@@ -90,6 +90,40 @@ export class AsyncQueue implements Queue {
     throw new Error("Method not implemented.");
   }
 
+  public getLogs() {
+    return this.eventRecorder?.events;
+  }
+
+  public wait(id: string) {
+    return new Promise<any>((resolve, reject) => {
+      const clearListeners = () => {
+        this.removeListener("finish", onFinish);
+      };
+
+      const onFinish = () => {
+        clearListeners();
+        resolve(undefined);
+      };
+
+      const onResolve = (event: QueueResolveEvent<any>) => {
+        if (event.contextId === id) {
+          clearListeners();
+          if ("error" in event) {
+            reject(event.error);
+          }
+          if (event.isCanceled) {
+            reject((event as any).cancelReason);
+          } else if ("data" in event) {
+            resolve(event.data);
+          }
+        }
+      };
+
+      this.on("finish", onFinish);
+      this.on("resolve", onResolve);
+    });
+  }
+
   public tick(): void {
     this.eventRecorder?.register("tick", { queue: this.queue });
 
@@ -104,7 +138,7 @@ export class AsyncQueue implements Queue {
         .filter((r) => r.isExecuting());
       if (executingThreads.length === 0) {
         this.eventRecorder?.register("done");
-        this.observerManager.emit("onFinish");
+        this.emit("finish");
         this.eventRecorder?.print();
         return;
       }
@@ -171,22 +205,11 @@ export class AsyncQueue implements Queue {
           ...resolveEvent,
           queue: undefined,
         });
-        await this.observerManager.emitAsync(
-          "onResolve",
-          resolveEvent as QueueResolveEvent<any>,
-        );
+        await this.emitAsync("resolve", resolveEvent as QueueResolveEvent<any>);
 
         this.eventRecorder?.register("clear-context-map", { ctx });
         this.contextMap.delete(ctx.id);
         this.tick();
       });
-  }
-
-  public addObserver(map: Partial<QueueObserverMap>) {
-    this.observerManager.addFromMap(map);
-  }
-
-  public removeObserver(map: Partial<QueueObserverMap>) {
-    this.observerManager.removeFromMap(map);
   }
 }
