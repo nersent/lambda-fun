@@ -10,7 +10,7 @@ export const useTimeoutExample = async () => {
       // you can return just a function, but also an object, then you can view it in verbose logs
       return {
         fn: () => {
-          console.log(`[${index}]: time`);
+          console.log(`[${index}]: ${time}`);
           return delay(time);
         },
         time,
