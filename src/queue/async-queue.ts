@@ -1,9 +1,4 @@
-import { ObserverManager } from "../utils/observer-manager";
-import {
-  IThread,
-  IThreadManager,
-  ThreadExecutionResponse,
-} from "../threads/thread-types";
+import { IThread, IThreadManager } from "../threads/thread-types";
 import { makeId } from "../utils";
 import { QueueEventRecorder } from "./queue-event-recorder";
 import {
@@ -23,6 +18,7 @@ export interface AsyncQueueEntry {
 
 export interface AsyncQueueExecutionContext extends QueueExecutionContext {
   data: any;
+  cancelReason?: QueueCancelReason;
 }
 
 export type AsyncQueueEventRecorderType =
@@ -35,7 +31,8 @@ export type AsyncQueueEventRecorderType =
   | "before-execution"
   | "after-execution"
   | "emit-resolve"
-  | "clear-context-map";
+  | "clear-context-map"
+  | "cancel-remove-from-queue";
 
 export interface AsyncQueueDelegates {
   readonly threadManager: IThreadManager;
@@ -86,8 +83,36 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
     throw new Error("Method not implemented.");
   }
 
-  public cancel(ids: string | string[], reason?: any): Promise<void> {
-    throw new Error("Method not implemented.");
+  public async cancel(
+    ids: string | string[],
+    reason: QueueCancelReason = new QueueCancelReason(
+      `Operation ${ids} was canceled`,
+    ),
+  ): Promise<void> {
+    const id = ids as string;
+    const ctx = this.getContext(id);
+
+    if (ctx == null) {
+      const queueIndex = this.queue.findIndex((r) => r.id);
+      if (queueIndex >= 0) {
+        this.eventRecorder?.register("cancel-remove-from-queue", {
+          index: queueIndex,
+          queue: this.queue,
+        });
+        this.queue.splice(queueIndex, 1);
+      } else {
+        throw new Error(
+          `Context for ${id} is not found and entry is not in queue`,
+        );
+      }
+    } else {
+      ctx.cancelReason = reason;
+      await this.emitAsync("cancel", id, reason);
+    }
+  }
+
+  public exists(id: string) {
+    return this.contextMap.has(id) || this.queue.some((r) => r.id === id);
   }
 
   public getLogs() {
@@ -106,7 +131,7 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
       };
 
       const onResolve = (event: QueueResolveEvent<any>) => {
-        if (event.contextId === id) {
+        if (event.id === id) {
           clearListeners();
           if ("error" in event) {
             reject(event.error);
@@ -183,21 +208,21 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
         this.eventRecorder?.register("after-execution", { ctx, res });
 
         let resolveEvent: Partial<QueueResolveEvent<any>> = {
-          contextId: ctx.id,
+          id: ctx.id,
           queue: this,
         };
 
+        if (ctx.cancelReason) {
+          resolveEvent = {
+            ...resolveEvent,
+            isCanceled: true,
+            cancelReason: ctx.cancelReason,
+          };
+        }
+
         if ("error" in res) {
-          if (res.error instanceof QueueCancelReason) {
-            resolveEvent = {
-              ...resolveEvent,
-              isCanceled: true,
-              cancelReason: res.error,
-            };
-          } else {
-            resolveEvent = { ...resolveEvent, error: res.error };
-          }
-        } else {
+          resolveEvent = { ...resolveEvent, error: res.error };
+        } else if (ctx.cancelReason == null) {
           resolveEvent = { ...resolveEvent, data: res.data };
         }
 

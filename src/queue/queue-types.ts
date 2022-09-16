@@ -24,11 +24,12 @@ export interface Queue extends Observable<QueueObserverMap> {
   /**
    * Cancels one or multiple tasks.
    */
-  cancel(ids: string | string[], reason?: any): Promise<void>;
+  cancel(ids: string | string[], reason?: QueueCancelReason): Promise<void>;
   /**
    * Processes the queue. You should at least call it once.
    */
   tick(): void;
+  exists(id: string): boolean;
 }
 
 export type QueueObserverMap = {
@@ -44,7 +45,7 @@ export type QueueObserverMap = {
 };
 
 export type QueueResolveEvent<T> =
-  | { contextId: string; queue: Queue; isCanceled: boolean } & (
+  | { id: string; queue: Queue; isCanceled: boolean } & (
       | {
           data: T;
         }
@@ -54,6 +55,7 @@ export type QueueResolveEvent<T> =
       | {
           isCanceled: true;
           cancelReason: QueueCancelReason;
+          error?: any;
         }
     );
 

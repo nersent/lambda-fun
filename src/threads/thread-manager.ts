@@ -1,4 +1,4 @@
-import { ObserverManager } from "../utils/observer-manager";
+import { Observable } from "../utils/observable";
 import { Thread } from "./thread";
 import {
   IThread,
@@ -7,9 +7,10 @@ import {
   ThreadStatus,
 } from "./thread-types";
 
-export class ThreadManager implements IThreadManager {
-  private observerManager = new ObserverManager<ThreadManagerObserverMap>();
-
+export class ThreadManager
+  extends Observable<ThreadManagerObserverMap>
+  implements IThreadManager
+{
   private threadMap = new Map<string, IThread>();
 
   private _threadCount = 0;
@@ -32,14 +33,6 @@ export class ThreadManager implements IThreadManager {
 
   public findExecutableThread(ctx: Record<string, any>): IThread | undefined {
     return this._threads.find((r) => r.isValidForExecution(ctx));
-  }
-
-  public addObserver(map: Partial<ThreadManagerObserverMap>) {
-    this.observerManager.addFromMap(map);
-  }
-
-  public removeObserver(map: Partial<ThreadManagerObserverMap>) {
-    this.observerManager.removeFromMap(map);
   }
 
   public getThreadsCount(): number {
@@ -91,13 +84,13 @@ export class ThreadManager implements IThreadManager {
 
   public async createThread(): Promise<IThread> {
     const thread = new Thread();
-    await this.observerManager.emitAsync("onThreadCreate", thread.getId());
+    await this.emitAsync("createThread", thread.getId());
     this.threadMap.set(thread.getId(), thread);
     return thread;
   }
 
   public async deleteThread(id: string) {
-    await this.observerManager.emitAsync("onThreadDelete", id);
+    await this.emitAsync("deleteThread", id);
     this.threadMap.delete(id);
   }
 

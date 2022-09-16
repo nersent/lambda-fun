@@ -26,7 +26,7 @@ export const threadify = (
   options: ThreadifyOptions,
   ...entries: ThreadifyEntry[]
 ) => {
-  if (entries.length === 0) return [];
+  if (entries.length === 0) return [] as any[];
 
   return new Promise<any[]>(async (resolve, reject) => {
     const threadManager = new ThreadManager();
@@ -56,7 +56,7 @@ export const threadify = (
 
     entries.forEach((entry) => {
       if (typeof entry === "function") {
-        queue.enqueue({ entry });
+        queue.enqueue({ fn: entry });
       } else {
         queue.enqueue(entry);
       }
