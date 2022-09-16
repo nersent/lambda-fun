@@ -1,0 +1,192 @@
+import { ObserverManager } from "../utils/observer-manager";
+import {
+  IThread,
+  IThreadManager,
+  ThreadExecutionResponse,
+} from "../threads/thread-types";
+import { makeId } from "../utils";
+import { QueueEventRecorder } from "./queue-event-recorder";
+import {
+  Queue,
+  QueueCancelReason,
+  QueueEnqueueOptions,
+  QueueExecutionContext,
+  QueueObserverMap,
+  QueueResolveEvent,
+} from "./queue-types";
+
+export interface AsyncQueueEntry {
+  id: string;
+  data: Record<string, any>;
+}
+
+export interface AsyncQueueExecutionContext extends QueueExecutionContext {
+  data: Record<string, any>;
+}
+
+export type AsyncQueueEventRecorderType =
+  | "enqueue"
+  | "tick"
+  | "flush-threads"
+  | "done"
+  | "empty-queue"
+  | "no-executable-thread"
+  | "before-execution"
+  | "after-execution"
+  | "emit-resolve"
+  | "clear-context-map";
+
+export interface AsyncQueueDelegates {
+  readonly threadManager: IThreadManager;
+  readonly execute: (ctx: AsyncQueueExecutionContext) => Promise<any> | any;
+}
+
+export interface AsyncQueueOptions {
+  verbose?: boolean;
+  printSteps?: boolean;
+}
+
+export class AsyncQueue implements Queue {
+  private readonly queue: AsyncQueueEntry[] = [];
+
+  private readonly contextMap = new Map<string, AsyncQueueExecutionContext>();
+
+  private readonly observerManager = new ObserverManager<QueueObserverMap>();
+
+  private readonly eventRecorder:
+    | QueueEventRecorder<AsyncQueueEventRecorderType>
+    | undefined = undefined;
+
+  constructor(
+    private readonly delegates: AsyncQueueDelegates,
+    private readonly options?: AsyncQueueOptions,
+  ) {
+    this.eventRecorder = new QueueEventRecorder(
+      options?.verbose && options.printSteps,
+    );
+  }
+
+  public getContext(id: string): AsyncQueueExecutionContext | undefined {
+    return this.contextMap.get(id);
+  }
+
+  public enqueue(data: any, opts?: QueueEnqueueOptions | undefined): string {
+    const id = makeId();
+    const entry: AsyncQueueEntry = { id, data };
+    this.eventRecorder?.register("enqueue", entry);
+    this.queue.push(entry);
+    return id;
+  }
+
+  public pause(ids: string | string[], reason?: any): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+
+  public resume(ids: string | string[], reason?: any): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+
+  public cancel(ids: string | string[], reason?: any): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+
+  public tick(): void {
+    this.eventRecorder?.register("tick", { queue: this.queue });
+
+    this.eventRecorder?.register("flush-threads", {
+      threads: this.delegates.threadManager.getThreads(),
+    });
+    this.delegates.threadManager.flush();
+
+    if (this.queue.length === 0) {
+      const executingThreads = this.delegates.threadManager
+        .getThreads()
+        .filter((r) => r.isExecuting());
+      if (executingThreads.length === 0) {
+        this.eventRecorder?.register("done");
+        this.observerManager.emit("onFinish");
+        this.eventRecorder?.print();
+        return;
+      }
+    }
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      const entry = this.queue.shift();
+      if (entry == null) {
+        this.eventRecorder?.register("empty-queue");
+        break;
+      }
+
+      const thread = this.delegates.threadManager.findExecutableThread({});
+
+      if (thread == null) {
+        this.queue.unshift(entry);
+        this.eventRecorder?.register("no-executable-thread");
+        break;
+      }
+
+      const ctx: AsyncQueueExecutionContext = {
+        id: entry.id,
+        threadId: thread.getId(),
+        data: entry.data,
+      };
+
+      this.eventRecorder?.register("before-execution", { ctx });
+      this.contextMap.set(entry.id, ctx);
+      this.executeOnThread(thread, ctx);
+    }
+  }
+
+  protected executeOnThread(thread: IThread, ctx: AsyncQueueExecutionContext) {
+    thread
+      .execute({
+        fn: () => {
+          return this.delegates.execute(ctx);
+        },
+      })
+      .then(async (res) => {
+        this.eventRecorder?.register("after-execution", { ctx, res });
+
+        let resolveEvent: Partial<QueueResolveEvent<any>> = {
+          contextId: ctx.id,
+          queue: this,
+        };
+
+        if ("error" in res) {
+          if (res.error instanceof QueueCancelReason) {
+            resolveEvent = {
+              ...resolveEvent,
+              isCanceled: true,
+              cancelReason: res.error,
+            };
+          } else {
+            resolveEvent = { ...resolveEvent, error: res.error };
+          }
+        } else {
+          resolveEvent = { ...resolveEvent, data: res.data };
+        }
+
+        this.eventRecorder?.register("emit-resolve", {
+          ...resolveEvent,
+          queue: undefined,
+        });
+        await this.observerManager.emitAsync(
+          "onResolve",
+          resolveEvent as QueueResolveEvent<any>,
+        );
+
+        this.eventRecorder?.register("clear-context-map", { ctx });
+        this.contextMap.delete(ctx.id);
+        this.tick();
+      });
+  }
+
+  public addObserver(map: Partial<QueueObserverMap>) {
+    this.observerManager.addFromMap(map);
+  }
+
+  public removeObserver(map: Partial<QueueObserverMap>) {
+    this.observerManager.removeFromMap(map);
+  }
+}

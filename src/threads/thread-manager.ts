@@ -1,78 +1,115 @@
-export interface ThreadManager {
-  /**
-   * Returns the number of total usable threads.
-   */
-  getCount(): number;
-  /**
-   * Sets the number of total usable threads.
-   */
-  setCount(count: number): void;
-  getThread(id: string): Thread | undefined;
-  getAvailableThread<T>(data: T): Thread | undefined;
-  /**
-   * Removes non running threads marked as killed.
-   */
-  flushThreads(): void;
-  isAnyRunning(): boolean;
-  /**
-   * Returns the current state. Can be used for debugging.
-   */
-  getState(): any;
-}
+import { ObserverManager } from "../utils/observer-manager";
+import { Thread } from "./thread";
+import {
+  IThread,
+  IThreadManager,
+  ThreadManagerObserverMap,
+  ThreadStatus,
+} from "./thread-types";
 
-export interface ThreadManagerDelegates {
-  onCreate?: (threadId: string) => void;
-  onDelete?: (threadId: string) => void;
-}
+export class ThreadManager implements IThreadManager {
+  private observerManager = new ObserverManager<ThreadManagerObserverMap>();
 
-export interface Thread {
-  getId(): string;
-  getStatus(): ThreadStatus;
-  /**
-   * If thread is marked as killed, then it won't accept new data, but waits until it has resolved. Then it is removed.
-   */
-  isKilled(): boolean;
-  markAsKilled(killed: boolean): void;
-  /**
-   * Indicates that thread is ready and can accept any data.
-   */
-  isReady(): boolean;
-  /**
-   * Marks thread as ready. Throws error if in pending status.
-   */
-  markAsReady(): void;
-  /**
-   * Indicates that thread is ready and can accept certain or any data.
-   */
-  accept<T>(data: T): boolean;
-  /**
-   * Indicates that handler function is running.
-   */
-  isRunning(): boolean;
-  execute<T, K>(data: ThreadData<T, K>): Promise<K | null>;
-}
+  private threadMap = new Map<string, IThread>();
 
-export interface ThreadData<T, K> {
-  data: T;
-  handler: (data: T) => Promise<K>;
-  onFinish?: (err?: any, res?: K) => void;
-}
+  private _threadCount = 0;
 
-export enum ThreadStatus {
-  /**
-   * Thread is initialized and is ready to accept data.
-   */
-  Ready,
-  /**
-   * Initialied with data. The handler function is executing and neither has it finished nor rejected.
-   */
-  Pending,
-  /**
-   * When the handler function has finished successfully.
-   */
-  Fulfilled,
-  /**
-   * When the handler function has finished and threw an error.
-   */
-  Rejected,
+  private get _threadMapCount() {
+    return this.threadMap.size;
+  }
+
+  private get _threads() {
+    return [...this.threadMap.values()];
+  }
+
+  public getThreads(): IThread[] {
+    return this._threads;
+  }
+
+  public getThread(id: string): IThread | undefined {
+    return this.threadMap.get(id);
+  }
+
+  public findExecutableThread(ctx: Record<string, any>): IThread | undefined {
+    return this._threads.find((r) => r.isValidForExecution(ctx));
+  }
+
+  public addObserver(map: Partial<ThreadManagerObserverMap>) {
+    this.observerManager.addFromMap(map);
+  }
+
+  public removeObserver(map: Partial<ThreadManagerObserverMap>) {
+    this.observerManager.removeFromMap(map);
+  }
+
+  public getThreadsCount(): number {
+    return this._threadCount;
+  }
+
+  public async setThreadsCount(count: number) {
+    if (this._threadMapCount === count) {
+      this._threads.map((r) => r.setStatus(ThreadStatus.Available));
+    } else if (this._threadMapCount < count) {
+      // Unmark killed threads
+      this._threads.map((r) => r.setStatus(ThreadStatus.Available));
+      // Initialize threads
+      const additionalThreadsCount = count - this._threadMapCount;
+
+      await Promise.all(
+        Array.from({ length: additionalThreadsCount }).map(() => {
+          this.createThread();
+        }),
+      );
+    } else if (count === 0) {
+      this._threads.map((r) => r.setStatus(ThreadStatus.Killed));
+    } else {
+      this._threads.map((r) => r.setStatus(ThreadStatus.Available));
+
+      const executableThreads = this._threads.filter((r) => r.isExecutable());
+      const executingThreads = this._threads.filter((r) => r.isExecuting());
+
+      const killedExecutableThreads = executableThreads.slice(
+        0,
+        this._threads.length - count,
+      );
+
+      const killedExecutingThreads = executingThreads.slice(
+        killedExecutableThreads.length,
+        this._threads.length - count,
+      );
+
+      const killedThreads = [
+        ...killedExecutableThreads,
+        ...killedExecutingThreads,
+      ];
+
+      killedThreads.forEach((r) => r.setStatus(ThreadStatus.Killed));
+    }
+
+    this._threadCount = count;
+  }
+
+  public async createThread(): Promise<IThread> {
+    const thread = new Thread();
+    await this.observerManager.emitAsync("onThreadCreate", thread.getId());
+    this.threadMap.set(thread.getId(), thread);
+    return thread;
+  }
+
+  public async deleteThread(id: string) {
+    await this.observerManager.emitAsync("onThreadDelete", id);
+    this.threadMap.delete(id);
+  }
+
+  public async flush() {
+    const threads = this._threads.filter((thread) => {
+      return (
+        thread.getStatus() === ThreadStatus.Killed && !thread.isExecuting()
+      );
+    });
+
+    await Promise.all(
+      threads.map((thread) => this.deleteThread(thread.getId())),
+    );
+  }
 }

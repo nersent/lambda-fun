@@ -4,7 +4,7 @@
 // import { threadifyWorkerExample } from "./threadify-worker";
 // import { timeoutExample } from "./timeout";
 
-import { ThreadManager } from "../src/threads/thread-manager";
+import { ThreadManager } from "src/threads/thread-manager";
 import { AsyncQueue } from "../src/queue/async-queue";
 
 // const main = async () => {
@@ -19,33 +19,20 @@ import { AsyncQueue } from "../src/queue/async-queue";
 
 const main = async () => {
   const threadManager = new ThreadManager();
-
-  await threadManager.setThreadsCount(1);
-
   const queue = new AsyncQueue(
     {
       threadManager,
       execute: async (ctx) => {
-        // console.log(ctx.data);
+        console.log(ctx.data);
         return ctx.id;
       },
     },
-    { verbose: true },
+    { verbose: false },
   );
-
-  queue.addObserver({
-    onFinish: () => {
-      console.log("xd");
-    },
-  });
 
   const id = queue.enqueue("hello world");
 
-  queue.tick();
+  console.log(id);
 };
-
-process.on("exit", function () {
-  console.log("exit");
-});
 
 main();
