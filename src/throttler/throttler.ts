@@ -1,184 +1,234 @@
+import { makeId } from "../utils";
 import { QueueEventRecorder } from "../queue/queue-event-recorder";
 import { Observable } from "../utils/observable";
 
-// write a class that has a method called execute which accepts a function and throttles execution of that function based on the options passed to the constructor. The options passed to the constructor are: time frame and number of calls per that time frame
 export interface ThrottlerOptions {
   time: number;
   count: number;
 }
 
 export type ThrottlerObserverMap = {
-  lock: () => void;
-  unlock: () => void;
+  resolve: (id: string, error?: any, data?: any) => void;
 };
 
-interface ThrottlerBatchEntry {
-  startTime: number;
+export interface ThrottlerQueueEntry {
+  id: string;
+  fn: (...args: any[]) => any;
+}
+
+export interface ThrottlerBatchEntry {
+  id: string;
+  startTime?: number;
   endTime?: number;
   hasFinished: boolean;
 }
 
 export type ThrottlerEventRecorderType =
-  | "free-batch-call"
-  | "free-batch-clear"
-  | "set-unlock-timeout-undefined-unlock-time"
-  | "set-unlock-timeout"
-  | "unlock-timeout"
+  | "free-batch"
+  | "reset-batch"
+  | "handler-clear"
+  | "handler-resolved"
+  | "tick"
+  | "tick-is-locked"
+  | "tick-queue-empty"
+  | "execute-batch-entry"
   | "before-execution"
   | "after-execution"
-  | "before-resolve"
-  | "handle-call"
-  | "handle-remove-listeners";
+  | "resolve"
+  | "set-timeout"
+  | "timeout-fired"
+  | "execute-tick-call"
+  | "reset-batch-request";
 
 export class Throttler extends Observable<ThrottlerObserverMap> {
-  private currentBatch: ThrottlerBatchEntry[] = [];
+  private queue: ThrottlerQueueEntry[] = [];
 
-  private unlockTime: number | undefined = undefined;
+  private batch: ThrottlerBatchEntry[] = [];
 
-  private unlockTimeout: NodeJS.Timeout | undefined = undefined;
+  private batchLongestEndTime: number | undefined = undefined;
 
-  private recorder = new QueueEventRecorder<ThrottlerEventRecorderType>(false);
+  private timeout: NodeJS.Timeout | undefined = undefined;
 
-  constructor(private readonly options: ThrottlerOptions) {
+  private recorder: QueueEventRecorder<ThrottlerEventRecorderType> | undefined =
+    undefined;
+
+  constructor(public readonly options: ThrottlerOptions) {
     super();
   }
 
   public isLocked() {
-    return this.currentBatch.length >= this.options.count;
+    return this.batch.length >= this.options.count;
   }
 
   private freeBatch(now: number = Date.now()) {
-    this.recorder?.register("free-batch-call");
+    this.recorder?.register("free-batch", {
+      batch: this.batch,
+      queue: this.queue,
+      now,
+      latestEndTime: this.batchLongestEndTime,
+    });
 
-    const finishedEntries = this.currentBatch.filter(
-      (entry) => entry.hasFinished,
-    );
-
-    if (finishedEntries.length === 0) {
-      return;
+    if (this.batch.length === 0) {
+      return true;
     }
 
-    if (this.currentBatch.length === finishedEntries.length) {
-      // descending order
-      const sortedEntriesByEndTime = finishedEntries.sort(
-        (a, b) => b.endTime! - a.endTime!,
-      );
+    const finishedEntries = this.batch.filter((entry) => entry.hasFinished);
+    if (finishedEntries.length === 0) return false;
 
-      // const oldestStartTimeEntry = finishedEntries[0];
-      const latestEndTimeEntry = sortedEntriesByEndTime[0];
-
-      this.unlockTime = latestEndTimeEntry.endTime! + this.options.time;
-
-      if (now - latestEndTimeEntry.endTime! < this.options.time) {
-        this.recorder?.register("free-batch-clear", {
-          now,
-          latestEndTimeEntry,
-          unlockTime: this.unlockTime,
-          time: this.options.time,
-          batch: this.currentBatch,
-        });
-        this.currentBatch = [];
-        this.unlockTime = undefined;
+    if (this.batch.length === finishedEntries.length) {
+      if (this.batchLongestEndTime == null) {
+        throw new Error("Batch latest end time is undefined");
       }
-    }
-  }
 
-  private setUnlockTimeout() {
-    if (this.unlockTime != null) {
-      const delta = this.unlockTime - Date.now();
+      const delta = now - this.batchLongestEndTime;
 
-      this.recorder?.register("set-unlock-timeout", {
-        unlockTime: this.unlockTime,
+      this.recorder?.register("reset-batch-request", {
+        now,
         delta,
+        optionsTime: this.options.time,
+        batch: this.batch,
       });
 
-      clearTimeout(this.unlockTimeout);
-      this.unlockTimeout = setTimeout(() => {
-        if (this.isLocked()) return;
-        this.emit("unlock");
-        this.recorder?.register("unlock-timeout");
-      }, delta);
-    } else {
-      this.recorder?.register("set-unlock-timeout-undefined-unlock-time");
+      if (delta >= this.options.time) {
+        this.recorder?.register("reset-batch", {
+          now,
+          delta,
+          optionsTime: this.options.time,
+          batch: this.batch,
+        });
+        this.batch = [];
+        this.batchLongestEndTime = undefined;
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private enqueue(fn: (...args: any[]) => any, data: any) {
+    const id = makeId();
+    this.queue.push({ id, fn, data } as any);
+    return id;
+  }
+
+  private tick() {
+    this.recorder?.register("tick");
+
+    while (true) {
+      if (this.isLocked()) {
+        clearTimeout(this.timeout);
+
+        const canProceed = this.freeBatch();
+        this.recorder?.register("tick-is-locked", {
+          canProceed,
+          batchLongestEndTime: this.batchLongestEndTime,
+        });
+
+        if (!canProceed) {
+          if (this.batchLongestEndTime != null) {
+            const now = Date.now();
+            const delta = this.batchLongestEndTime + this.options.time - now;
+            this.recorder?.register("set-timeout", {
+              now,
+              delta,
+              optionsTime: this.options.time,
+            });
+            if (delta > 0) {
+              this.timeout = setTimeout(() => {
+                this.recorder?.register("timeout-fired", { delta });
+                this.tick();
+              }, delta);
+            }
+          }
+          return;
+        } else {
+          this.batchLongestEndTime = undefined;
+        }
+      }
+
+      const queueEntry = this.queue.shift();
+      if (queueEntry == null) {
+        this.recorder?.register("tick-queue-empty");
+        return;
+      }
+
+      const batchEntry: ThrottlerBatchEntry = {
+        id: queueEntry.id,
+        hasFinished: false,
+      };
+
+      this.batch.push(batchEntry);
+      this.executeBatchEntry(batchEntry, queueEntry);
     }
   }
 
-  public execute(fn: (...args: any[]) => any, data: any) {
-    return new Promise<any>(async (resolve, reject) => {
-      const removeListeners = () => {
-        this.recorder.register("handle-remove-listeners", { data });
-        this.removeListener("unlock", handle);
-      };
+  private async executeBatchEntry(
+    batchEntry: ThrottlerBatchEntry,
+    queueEntry: ThrottlerQueueEntry,
+  ) {
+    this.recorder?.register("execute-batch-entry", { batchEntry });
 
-      const handle = async () => {
-        this.recorder?.register("handle-call", {
-          data,
-          isLocked: this.isLocked(),
-        });
+    batchEntry.startTime = Date.now();
 
-        if (this.isLocked()) {
-          this.freeBatch();
-          this.setUnlockTimeout();
-          return;
-        }
-
-        const entry = {
-          startTime: Date.now(),
-          hasFinished: false,
-        } as ThrottlerBatchEntry;
-
-        this.currentBatch.push(entry);
-
-        this.recorder?.register("before-execution", { data });
-        const res = await fn();
-        this.recorder?.register("after-execution", { data });
-        removeListeners();
-
-        entry.endTime = Date.now();
-        entry.hasFinished = true;
-
-        this.recorder?.register("before-resolve", {
-          data,
-          entry,
-          entryIndex: this.currentBatch.indexOf(entry),
-        });
-
-        this.freeBatch();
-
-        if (this.unlockTime == null) {
-          handle();
-        } else {
-          this.setUnlockTimeout();
-        }
-
-        resolve(res);
-      };
-
-      this.on("unlock", handle);
-
-      handle();
+    this.recorder?.register("before-execution", {
+      batchEntry,
+      queueEntry,
+      batch: this.batch,
+      queue: this.queue,
     });
-    //   return new Promise<any>(async (resolve, reject) => {
-    //     const now = Date.now();
-    //     if (this.isLocked) {
-    //       this.once("unlock", () => {
-    //         // console.log("on unlock");
-    //         console.log(data);
-    //         resolve(data);
-    //       });
-    //     } else {
-    //       if (this.startTime == null) {
-    //         this.startTime = now;
-    //       }
-    //       console.log(data);
-    //       if (++this.counter >= this.options.count) {
-    //         this.lock();
-    //         // console.log("lock");
-    //       }
-    //       resolve(data);
-    //       // console.log("lock");
-    //     }
-    //   });
-    // }
+
+    let res: any = undefined;
+    let error: any = undefined;
+
+    try {
+      res = await queueEntry.fn();
+    } catch (e) {
+      error = e;
+    }
+
+    this.recorder?.register("after-execution", { batchEntry, queueEntry });
+
+    batchEntry.endTime = Date.now();
+    batchEntry.hasFinished = true;
+    if (
+      this.batchLongestEndTime == null ||
+      batchEntry.endTime > this.batchLongestEndTime
+    ) {
+      this.batchLongestEndTime = batchEntry.endTime;
+    }
+
+    this.recorder?.register("resolve", {
+      batchEntry,
+      queueEntry,
+      queue: this.queue,
+    });
+    this.tick();
+    this.emit("resolve", batchEntry.id, error, res);
+  }
+
+  public async execute(fn: (...args: any[]) => any, data: any) {
+    const id = this.enqueue(fn, data);
+
+    const promise = new Promise<any>(async (resolve, reject) => {
+      const clear = () => {
+        this.recorder?.register("handler-clear", { id, data });
+        this.removeListener("resolve", onResolve);
+      };
+
+      const onResolve = (eventId: string, error?: any, data?: any) => {
+        if (eventId !== id) return;
+        this.recorder?.register("handler-resolved", { id, error, data });
+        clear();
+        if (error != null) return reject(error);
+        resolve(data);
+      };
+
+      this.addListener("resolve", onResolve);
+    });
+
+    this.recorder?.register("execute-tick-call", { id, data });
+    this.tick();
+
+    return await promise;
   }
 }

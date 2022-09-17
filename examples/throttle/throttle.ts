@@ -2,7 +2,7 @@ import { delay } from "../../src/utils";
 import { Throttler } from "../../src/throttler/throttler";
 
 export const useThrottleExample = async () => {
-  const throttler = new Throttler({ time: 2000, count: 3 });
+  const throttler = new Throttler({ time: 2000, count: 2 });
 
   const now = Date.now();
 
@@ -23,13 +23,17 @@ export const useThrottleExample = async () => {
   const entries: Entry[] = [
     { message: "a", time: 0 },
     { message: "b", time: 5000 },
-    { message: "c", time: 0 },
-    { message: "d", time: 100 },
+    { message: "c", time: 2000 },
+    { message: "d", time: 0 },
+    { message: "e", time: 0 },
   ];
 
   await Promise.all(
-    entries.map((entry) =>
-      throttler.execute(fn(entry.time, entry.message), entry.message),
+    entries.map((entry, index) =>
+      throttler.execute(
+        fn(entry.time, entry.message + " " + index),
+        entry.message,
+      ),
     ),
   );
   // for (const entry of entries) {
