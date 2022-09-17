@@ -5,6 +5,7 @@ import { useThreadifyRetryExample } from "./threadify/retry";
 import { useThreadifyTimeoutExample } from "./threadify/timeout";
 import { useThreadifyThrottleExample } from "./threadify/throttle";
 import { useThrottleExample } from "./throttle/throttle";
+import { useThreadifyRetryAndThrottleExample } from "./threadify/retry-and-throttle";
 
 const main = async () => {
   // await useQueueNetworkAbortExample();
@@ -13,7 +14,8 @@ const main = async () => {
   // await useThreadifyTimeoutExample();
   // await useThreadifyRetryExample();
   // await useThreadifyThrottleExample();
-  await useThrottleExample();
+  await useThreadifyRetryAndThrottleExample();
+  // await useThrottleExample();
 };
 
 process.on("exit", function () {

@@ -103,9 +103,7 @@ describe("Throttler", () => {
         };
 
         const test = async () => {
-          await Promise.all(
-            items.map((item) => throttler.execute(fn(item), item)),
-          );
+          await Promise.all(items.map((item) => throttler.execute(fn(item))));
 
           expect(calls.map((r) => r.id)).toStrictEqual(
             items.map((item) => item.id),

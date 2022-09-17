@@ -105,9 +105,9 @@ export class Throttler extends Observable<ThrottlerObserverMap> {
     return false;
   }
 
-  private enqueue(fn: (...args: any[]) => any, data: any) {
+  private enqueue(fn: (...args: any[]) => any) {
     const id = makeId();
-    this.queue.push({ id, fn, data } as any);
+    this.queue.push({ id, fn });
     return id;
   }
 
@@ -206,27 +206,27 @@ export class Throttler extends Observable<ThrottlerObserverMap> {
     this.emit("resolve", batchEntry.id, error, res);
   }
 
-  public async execute(fn: (...args: any[]) => any, data: any) {
-    const id = this.enqueue(fn, data);
+  public async execute(fn: (...args: any[]) => any) {
+    const id = this.enqueue(fn);
 
     const promise = new Promise<any>(async (resolve, reject) => {
       const clear = () => {
-        this.recorder?.register("handler-clear", { id, data });
+        this.recorder?.register("handler-clear", { id });
         this.removeListener("resolve", onResolve);
       };
 
-      const onResolve = (eventId: string, error?: any, data?: any) => {
+      const onResolve = (eventId: string, error?: any, res?: any) => {
         if (eventId !== id) return;
-        this.recorder?.register("handler-resolved", { id, error, data });
+        this.recorder?.register("handler-resolved", { id, error, res });
         clear();
         if (error != null) return reject(error);
-        resolve(data);
+        resolve(res);
       };
 
       this.addListener("resolve", onResolve);
     });
 
-    this.recorder?.register("execute-tick-call", { id, data });
+    this.recorder?.register("execute-tick-call", { id });
     this.tick();
 
     return await promise;

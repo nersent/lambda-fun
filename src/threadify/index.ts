@@ -4,11 +4,13 @@ import {
   AsyncQueueExecutionContext,
   AsyncQueueOptions,
 } from "../queue/async-queue";
+import { Throttler } from "../throttler/throttler";
+import { Trier } from "../trier/trier";
 
 export type ThreadifyOptions = {
   threads: number;
-  maxTries?: number;
-  retryTimeout?: number;
+  trier?: Trier;
+  throttler?: Throttler;
   queueOptions?: Partial<AsyncQueueOptions & { verbosePath?: string }>;
   printItemsOnError?: boolean;
 } & (
@@ -19,11 +21,6 @@ export type ThreadifyOptions = {
       exitProcessOnError?: boolean;
     }
 );
-
-export interface ThreadifyOptionsTimeLimit {
-  time: number;
-  count: number;
-}
 
 interface ThreadifyExecutionContext extends AsyncQueueExecutionContext {
   data: { fn: (...args: any[]) => Promise<any> };
@@ -46,8 +43,6 @@ export const threadify = (
     await threadManager.setThreadsCount(options.threads);
 
     const items: any[] = [];
-    const tryCounter = new Map<string, number>();
-    let timeouts: NodeJS.Timeout[] = [];
 
     const queue = new AsyncQueue(
       {
@@ -74,52 +69,42 @@ export const threadify = (
     };
 
     queue.on("resolve", (e) => {
-      const ctx = queue.getContext(e.id)!;
-
-      const currentTry = (tryCounter.get(ctx.id) ?? 0) + 1;
-      tryCounter.set(ctx.id, currentTry);
-
-      if (options.maxTries != null && "error" in e) {
-        if (currentTry >= options.maxTries) {
-          return handleError(
-            new Error(`Max tries (${options.maxTries}) exceeded.`),
-          );
-        } else {
-          if (options.retryTimeout != null && options.retryTimeout !== 0) {
-            const timeout = setTimeout(() => {
-              queue.enqueue(ctx.data, { id: ctx.id, first: true });
-              queue.tick();
-              timeouts = timeouts.filter((t) => t !== timeout);
-            }, options.retryTimeout ?? 0);
-            timeouts.push(timeout);
-          } else {
-            queue.enqueue(ctx.data, { id: ctx.id, first: true });
-          }
-          return;
-        }
-      }
-
-      if ("error" in e && !e.isCanceled) {
-        handleError(e.error);
-      }
-
-      if ("data" in e) {
-        items.push(e.data);
-      }
+      if ("error" in e && !e.isCanceled) return handleError(e.error);
+      if ("data" in e) items.push(e.data);
     });
 
     queue.on("finish", () => {
-      if (timeouts.length === 0) {
-        resolve(items);
-      }
+      resolve(items);
     });
 
-    entries.forEach((entry) => {
-      if (typeof entry === "function") {
-        queue.enqueue({ fn: entry });
-      } else {
-        queue.enqueue(entry);
+    const wrapFn = (fn: (...args: any[]) => any) => {
+      let wrappedFn = fn;
+      if (options.trier) {
+        wrappedFn = () => options.trier!.execute(() => fn());
       }
+      if (options.throttler) {
+        wrappedFn = () => options.throttler!.execute(() => fn());
+      }
+      return wrappedFn;
+    };
+
+    const normalizeEntry = (entry: ThreadifyEntry): ThreadifyEntry => {
+      let fn: (...args: any[]) => any;
+      let data: any = undefined;
+
+      if (typeof entry === "function") {
+        fn = entry;
+      } else {
+        const { fn: _fn, ..._data } = entry;
+        fn = _fn;
+        data = _data;
+      }
+
+      return { fn: wrapFn(fn), ...data };
+    };
+
+    entries.forEach((entry) => {
+      queue.enqueue(normalizeEntry(entry));
     });
 
     queue.tick();
