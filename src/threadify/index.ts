@@ -9,7 +9,7 @@ export type ThreadifyOptions = {
   threads: number;
   maxTries?: number;
   retryTimeout?: number;
-  timeLimit?: ThreadifyOptionsTimeLimit;
+  throttle?: ThreadifyThrottleOptions;
   queueOptions?: Partial<AsyncQueueOptions & { verbosePath?: string }>;
   printItemsOnError?: boolean;
 } & (
@@ -21,7 +21,7 @@ export type ThreadifyOptions = {
     }
 );
 
-export interface ThreadifyOptionsTimeLimit {
+export interface ThreadifyThrottleOptions {
   time: number;
   count: number;
 }
@@ -48,7 +48,7 @@ export const threadify = (
 
     const items: any[] = [];
     const tryCounter = new Map<string, number>();
-    let timeouts: NodeJS.Timeout[] = [];
+    // let timeouts: NodeJS.Timeout[] = [];
 
     const queue = new AsyncQueue(
       {
@@ -60,66 +60,72 @@ export const threadify = (
       options?.queueOptions,
     );
 
-    const handleError = (error: any) => {
-      options?.printItemsOnError && console.log(items);
+    // const handleError = (error: any) => {
+    //   options?.printItemsOnError && console.log(items);
 
-      if ("rejectOnError" in options && options.rejectOnError) {
-        queue.clear();
-        return reject(error);
-      }
+    //   if ("rejectOnError" in options && options.rejectOnError) {
+    //     queue.clear();
+    //     return reject(error);
+    //   }
 
-      if ("exitProcessOnError" in options && options.exitProcessOnError) {
-        console.error(error);
-        process.exit(1);
-      }
-    };
+    //   if ("exitProcessOnError" in options && options.exitProcessOnError) {
+    //     console.error(error);
+    //     process.exit(1);
+    //   }
+    // };
 
+    // queue.on("resolve", (e) => {
+    //   const ctx = queue.getContext(e.id)!;
+
+    //   const currentTry = (tryCounter.get(ctx.id) ?? 0) + 1;
+    //   tryCounter.set(ctx.id, currentTry);
+
+    //   if (options.maxTries != null && "error" in e) {
+    //     if (currentTry >= options.maxTries) {
+    //       return handleError(
+    //         new Error(`Max tries (${options.maxTries}) exceeded.`),
+    //       );
+    //     } else {
+    //       if (options.retryTimeout != null && options.retryTimeout !== 0) {
+    //         const timeout = setTimeout(() => {
+    //           queue.enqueue(ctx.data, { id: ctx.id, first: true });
+    //           queue.tick();
+    //           timeouts = timeouts.filter((t) => t !== timeout);
+    //         }, options.retryTimeout ?? 0);
+    //         timeouts.push(timeout);
+    //       } else {
+    //         queue.enqueue(ctx.data, { id: ctx.id, first: true });
+    //       }
+    //       return;
+    //     }
+    //   }
+
+    //   if ("error" in e && !e.isCanceled) {
+    //     handleError(e.error);
+    //   }
+
+    //   if ("data" in e) {
+    //     items.push(e.data);
+    //   }
+    // });
+
+    // queue.on("finish", () => {
+    //   if (timeouts.length === 0) {
+    //     resolve(items);
+    //   }
+    // });
     queue.on("resolve", (e) => {
-      const ctx = queue.getContext(e.id)!;
-
-      const currentTry = (tryCounter.get(ctx.id) ?? 0) + 1;
-      tryCounter.set(ctx.id, currentTry);
-
-      if (options.maxTries != null && "error" in e) {
-        if (currentTry >= options.maxTries) {
-          return handleError(
-            new Error(`Max tries (${options.maxTries}) exceeded.`),
-          );
-        } else {
-          if (options.retryTimeout != null && options.retryTimeout !== 0) {
-            const timeout = setTimeout(() => {
-              queue.enqueue(ctx.data, { id: ctx.id, first: true });
-              queue.tick();
-              timeouts = timeouts.filter((t) => t !== timeout);
-            }, options.retryTimeout ?? 0);
-            timeouts.push(timeout);
-          } else {
-            queue.enqueue(ctx.data, { id: ctx.id, first: true });
-          }
-          return;
-        }
-      }
-
-      if ("error" in e && !e.isCanceled) {
-        handleError(e.error);
-      }
-
-      if ("data" in e) {
-        items.push(e.data);
-      }
+      console.log("XDD");
+      console.log(queue["queue"]);
     });
 
-    queue.on("finish", () => {
-      if (timeouts.length === 0) {
-        resolve(items);
-      }
-    });
-
-    entries.forEach((entry) => {
+    entries.forEach((entry, index) => {
+      const isPaused = index !== 0 && options.throttle != null;
+      console.log(index, isPaused);
       if (typeof entry === "function") {
-        queue.enqueue({ fn: entry });
+        queue.enqueue({ fn: entry }, { isPaused });
       } else {
-        queue.enqueue(entry);
+        queue.enqueue(entry, { isPaused });
       }
     });
 

@@ -1,8 +1,8 @@
-import { ThreadManager } from "../src/threads/thread-manager";
-import { AsyncQueue } from "../src/queue/async-queue";
+import { ThreadManager } from "../../src/threads/thread-manager";
+import { AsyncQueue } from "../../src/queue/async-queue";
 import axios, { CancelTokenSource } from "axios";
 
-export const useNetworkAbortExample = async () => {
+export const useQueueNetworkAbortExample = async () => {
   const threadManager = new ThreadManager();
 
   await threadManager.setThreadsCount(1);

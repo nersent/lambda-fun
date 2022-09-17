@@ -1,7 +1,7 @@
-import { threadify, ThreadifyEntry } from "../src/threadify";
-import { delay } from "../src/utils";
+import { threadify } from "../../src/threadify";
+import { delay } from "../../src/utils";
 
-export const useMessageExample = async () => {
+export const useThreadifyMessageExample = async () => {
   interface QueueItem {
     time: number;
     char: string;

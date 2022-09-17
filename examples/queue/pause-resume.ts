@@ -1,8 +1,8 @@
-import { ThreadManager } from "../src/threads/thread-manager";
-import { AsyncQueue } from "../src/queue/async-queue";
-import { delay } from "../src/utils";
+import { ThreadManager } from "../../src/threads/thread-manager";
+import { AsyncQueue } from "../../src/queue/async-queue";
+import { delay } from "../../src/utils";
 
-export const usePauseResumeExample = async () => {
+export const useQueuePauseResumeExample = async () => {
   const threadManager = new ThreadManager();
 
   await threadManager.setThreadsCount(1);

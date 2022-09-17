@@ -1,7 +1,7 @@
-import { threadify, ThreadifyEntry } from "../src/threadify";
-import { delay } from "../src/utils";
+import { threadify, ThreadifyEntry } from "../../src/threadify";
+import { delay } from "../../src/utils";
 
-export const useTimeoutExample = async () => {
+export const useThreadifyTimeoutExample = async () => {
   await threadify(
     { threads: 4, queueOptions: { verbose: false } },
     ...[
