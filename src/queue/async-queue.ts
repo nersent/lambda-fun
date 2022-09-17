@@ -42,7 +42,9 @@ export type AsyncQueueEventRecorderType =
   | "tick-call"
   | "omit-paused"
   | "resume"
-  | "tick-loop-break-pause";
+  | "empty-queue-all-paused"
+  | "tick-loop-start"
+  | "tick-loop-end";
 
 export interface AsyncQueueDelegates {
   readonly threadManager: IThreadManager;
@@ -125,13 +127,12 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
     const entryIndex = this.queue.findIndex((r) => r.id === id);
     if (entryIndex === -1) throw new Error(`Entry ${id} not found`);
 
-    let entry: AsyncQueueEntry;
+    const entry = this.queue.splice(entryIndex, 1)[0];
 
     if (first) {
-      entry = this.queue.splice(entryIndex, 1)[0];
       this.queue.unshift(entry);
     } else {
-      entry = this.queue[entryIndex];
+      this.queue.push(entry);
     }
 
     entry.isPaused = false;
@@ -216,6 +217,8 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
     this.delegates.threadManager.flush();
 
     if (this.queue.length === 0) {
+      this.eventRecorder?.register("empty-queue");
+
       const executingThreads = this.delegates.threadManager
         .getThreads()
         .filter((r) => r.isExecuting());
@@ -225,52 +228,94 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
         this.eventRecorder?.print();
         return;
       }
+      return;
     }
+    // const queueEntries = this.queue.filter((r) => !r.isPaused);
 
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      const entry = this.queue.shift();
-      if (entry == null) {
-        this.eventRecorder?.register("empty-queue");
-        break;
+    // if (queueEntries.length === 0) {
+    //   this.eventRecorder?.register("empty-queue-all-paused", {queue: this.queue});
+    //   return;
+    // }
+    const queueCopy = [...this.queue];
+
+    this.eventRecorder?.register("tick-loop-start", { queueCopy });
+
+    for (const queueEntry of queueCopy) {
+      if (queueEntry.isPaused) {
+        this.eventRecorder?.register("omit-paused", { queueEntry });
+        continue;
       }
 
-      if (entry.isPaused) {
-        this.queue.push(entry);
+      const queueEntryIndex = this.queue.indexOf(queueEntry);
 
-        if (this.queue.length === 1) {
-          this.eventRecorder?.register("tick-loop-break-pause", {
-            entry,
-            queue: this.queue,
-          });
-          break;
-        }
-
-        this.eventRecorder?.register("omit-paused", {
-          entry,
-          queue: this.queue,
-        });
-        continue;
+      if (queueEntryIndex === -1) {
+        throw new Error("Queue entry index is invalid");
       }
 
       const thread = this.delegates.threadManager.findExecutableThread({});
 
       if (thread == null) {
-        this.queue.unshift(entry);
-        this.eventRecorder?.register("no-executable-thread", { entry });
+        this.eventRecorder?.register("no-executable-thread", {
+          entry: queueEntry,
+        });
         break;
       }
 
+      this.queue.splice(queueEntryIndex, 1);
+
       const ctx: AsyncQueueExecutionContext = {
-        id: entry.id,
+        id: queueEntry.id,
         threadId: thread.getId(),
-        data: entry.data,
+        data: queueEntry.data,
       };
 
       this.eventRecorder?.register("before-execution", { ctx });
-      this.contextMap.set(entry.id, ctx);
+      this.contextMap.set(queueEntry.id, ctx);
       this.executeOnThread(thread, ctx);
     }
+
+    this.eventRecorder?.register("tick-loop-end");
+
+    // eslint-disable-next-line no-constant-condition
+    // while (true) {
+    //   // const entry = this.queue.shift();
+
+    //   if (entry.isPaused) {
+    //     this.queue.push(entry);
+
+    //     if (this.queue.length === 1) {
+    //       this.eventRecorder?.register("tick-loop-break-pause", {
+    //         entry,
+    //         queue: this.queue,
+    //       });
+    //       break;
+    //     }
+
+    //     this.eventRecorder?.register("omit-paused", {
+    //       entry,
+    //       queue: this.queue,
+    //     });
+    //     continue;
+    //   }
+
+    //   const thread = this.delegates.threadManager.findExecutableThread({});
+
+    //   if (thread == null) {
+    //     this.queue.unshift(entry);
+    //     this.eventRecorder?.register("no-executable-thread", { entry });
+    //     break;
+    //   }
+
+    //   const ctx: AsyncQueueExecutionContext = {
+    //     id: entry.id,
+    //     threadId: thread.getId(),
+    //     data: entry.data,
+    //   };
+
+    //   this.eventRecorder?.register("before-execution", { ctx });
+    //   this.contextMap.set(entry.id, ctx);
+    //   this.executeOnThread(thread, ctx);
+    // }
   }
 
   protected executeOnThread(thread: IThread, ctx: AsyncQueueExecutionContext) {

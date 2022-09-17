@@ -31,7 +31,7 @@ export const useQueuePauseResumeExample = async () => {
     if ("data" in e) {
       console.log(`[${e.id}]: resolved with`, e.data);
       if (e.id === "d") {
-        queue.resume("a", true);
+        queue.resume("a", true); // true
       }
     }
   });
