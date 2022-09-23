@@ -16,14 +16,13 @@ export const threadify = (
   options: ThreadifyOptions,
   ...entries: ThreadifierEntry[]
 ) => {
-  const threadifier = new Threadifier(options, {
-    getWrappers: (ctx) => {
-      return [
-        options.throttler?.execute?.bind(options.throttler),
-        options.repeater?.execute?.bind(options.repeater),
-      ];
+  const threadifier = new Threadifier(
+    { threads: options.threads },
+    {
+      repeater: options.repeater,
+      throttler: options.throttler,
     },
-  });
+  );
 
   return threadifier.execute(...entries);
 };

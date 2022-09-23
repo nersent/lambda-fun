@@ -2,6 +2,9 @@ import { QueueExecutionContext, QueueResolveEvent } from "../queue/queue-types";
 import { FunctionWrapper, wrapFunction } from "../utils/function";
 import { Queue, QueueEntry } from "../queue/queue";
 import { ThreadPool } from "./thread-pool";
+import { Observable } from "../observable/observable";
+import { IRepeater } from "../repeater/repeater-types";
+import { IThrottler } from "../throttler/throttler-types";
 
 export type ThreadifierOptions = {
   threads: number;
@@ -18,9 +21,11 @@ export type ThreadifierOnErrorOptions = { printCurrentResponses?: boolean } & (
 );
 
 export interface ThreadifierDelegates {
-  getWrappers?: (
-    ctx: ThreadifierQueueExecutionContext,
-  ) => (FunctionWrapper | undefined)[];
+  repeater?: IRepeater;
+  throttler?: IThrottler;
+  // getWrappers?: (
+  //   ctx: ThreadifierQueueExecutionContext,
+  // ) => (FunctionWrapper | undefined)[];
 }
 
 export type ThreadifierEntry = (...args: any[]) => any;
@@ -34,7 +39,17 @@ export interface ThreadifierQueueExecutionContext
   data: { fn: (...args: any[]) => Promise<any> };
 }
 
-export class Threadifier {
+export type ThreadifierEventMap = {
+  resolve: (e: ThreadifierResolveEvent) => void;
+};
+
+export interface ThreadifierResolveEvent {
+  data: any;
+  current: number;
+  total: number;
+}
+
+export class Threadifier extends Observable<ThreadifierEventMap> {
   protected isExecuting = false;
 
   protected readonly queue: Queue;
@@ -43,10 +58,15 @@ export class Threadifier {
 
   protected responses: any[] = [];
 
+  protected current = 0;
+
+  protected total = 0;
+
   constructor(
     public readonly options: ThreadifierOptions,
     protected readonly delegates: ThreadifierDelegates,
   ) {
+    super();
     this.threadPool = this.createThreadPool();
     this.queue = this.createQueue(this.threadPool);
   }
@@ -66,7 +86,12 @@ export class Threadifier {
     const {
       data: { fn },
     } = ctx;
-    return wrapFunction(fn, ...(this.delegates.getWrappers?.(ctx) ?? []))();
+    return wrapFunction(
+      fn,
+      this.delegates.throttler?.execute?.bind(this.delegates.throttler),
+      this.delegates.repeater?.execute?.bind(this.delegates.repeater),
+    )();
+    // return wrapFunction(fn, ...(this.delegates.getWrappers?.(ctx) ?? []))();
   };
 
   public async execute(...entries: ThreadifierEntry[]) {
@@ -75,7 +100,10 @@ export class Threadifier {
     }
 
     if (entries.length === 0) return [];
+
     this.responses = [];
+    this.current = 0;
+    this.total = entries.length;
 
     if (this.threadPool.getPoolSize() !== this.options.threads) {
       await this.threadPool.setPoolSize(this.options.threads);
@@ -117,8 +145,16 @@ export class Threadifier {
       };
 
       const onResolve = (e: QueueResolveEvent<any>) => {
+        this.current++;
         if ("error" in e && !e.isCanceled) return handleError(e.error);
-        if ("data" in e) this.responses.push(e.data);
+        if ("data" in e) {
+          this.responses.push(e.data);
+          this.emit("resolve", {
+            data: e.data,
+            current: this.current,
+            total: this.total,
+          });
+        }
       };
 
       const onFinish = () => {
