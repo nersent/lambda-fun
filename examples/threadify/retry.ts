@@ -1,4 +1,3 @@
-import { Trier } from "../../src/trier/trier";
 import { threadify, ThreadifyEntry } from "../../src/threadify";
 import { delay } from "../../src/utils";
 
@@ -8,7 +7,9 @@ export const useThreadifyRetryExample = async () => {
   const res = await threadify(
     {
       threads: 1,
-      trier: new Trier({ maxTries: 3 }),
+      repeaterOptions: {
+        maxAttempts: 3,
+      },
       rejectOnError: true,
       queueOptions: { verbose: false, printSteps: true },
     },

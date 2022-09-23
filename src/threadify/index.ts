@@ -6,10 +6,12 @@ import {
 } from "../queue/async-queue";
 import { Throttler } from "../throttler/throttler";
 import { Trier } from "../trier/trier";
+import { Repeater } from "../repeater/repeater";
+import { RepeaterExecuteOptions } from "../repeater/repeater-types";
 
 export type ThreadifyOptions = {
   threads: number;
-  trier?: Trier;
+  repeaterOptions?: RepeaterExecuteOptions;
   throttler?: Throttler;
   queueOptions?: Partial<AsyncQueueOptions & { verbosePath?: string }>;
   printItemsOnError?: boolean;
@@ -44,6 +46,9 @@ export const threadify = (
 
     const items: any[] = [];
 
+    const repeater =
+      options.repeaterOptions != null ? new Repeater() : undefined;
+
     const queue = new AsyncQueue(
       {
         threadManager,
@@ -77,16 +82,33 @@ export const threadify = (
       resolve(items);
     });
 
-    const wrapFn = (fn: (...args: any[]) => any) => {
-      let wrappedFn = fn;
-      if (options.trier) {
-        wrappedFn = () => options.trier!.execute(() => fn());
-      }
-      if (options.throttler) {
-        wrappedFn = () => options.throttler!.execute(() => fn());
-      }
-      return wrappedFn;
-    };
+    // const wrapFn = (fn: (...args: any[]) => any)  => {
+    //   let wrappedFn = fn;
+    //   if (options.throttler) {
+    //     wrappedFn = () => options.throttler!.execute(() => fn());
+    //   }
+    //   if (repeater != null) {
+    //     wrappedFn = () =>
+    //       repeater.execute(() => copy(), options.repeaterOptions);
+    //   }
+    //   const copy = wrappedFn;
+    //   return wrappedFn;
+    // };
+    const wrapFn =
+      (fn: (...args: any[]) => any) =>
+      (...args: any[]) => {
+        if (options.throttler != null && repeater != null) {
+          return repeater.execute(
+            () => options.throttler!.execute(() => fn(...args)),
+            options.repeaterOptions,
+          );
+        }
+        if (options.throttler == null && repeater == null) {
+          return fn(...args);
+        }
+        console.log(options, repeater);
+        throw new Error("Unsupported edge case");
+      };
 
     const normalizeEntry = (entry: ThreadifyEntry): ThreadifyEntry => {
       let fn: (...args: any[]) => any;
