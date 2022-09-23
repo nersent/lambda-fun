@@ -6,7 +6,7 @@ import {
   IQueue,
   QueueCancelReason,
   QueueEnqueueOptions,
-  QueueEventMap,
+  QueueEventMap as IQueueEventMap,
   QueueExecutionContext as IQueueExecutionContext,
   QueuePauseReason,
   QueueResolveEvent,
@@ -23,6 +23,10 @@ export interface QueueExecutionContext extends IQueueExecutionContext {
   data: any;
   cancelReason?: QueueCancelReason;
 }
+
+export type QueueEventMap = IQueueEventMap & {
+  enqueue: (entries: QueueEntry[]) => Promise<void> | void;
+};
 
 export type QueueLogType =
   | "enqueue"
@@ -93,7 +97,7 @@ export class Queue extends Observable<QueueEventMap> implements IQueue {
     } else {
       this.queue.push(entry);
     }
-    this.emit("enqueue", entry);
+    this.emit("enqueue", [entry]);
     return id;
   }
 
@@ -126,6 +130,8 @@ export class Queue extends Observable<QueueEventMap> implements IQueue {
     const entryIndex = this.queue.findIndex((r) => r.id === id);
     if (entryIndex === -1) throw new Error(`Entry ${id} not found`);
 
+    await this.emitAsync("resume", id);
+
     const entry = this.queue.splice(entryIndex, 1)[0];
 
     if (first) {
@@ -142,7 +148,7 @@ export class Queue extends Observable<QueueEventMap> implements IQueue {
   private async _pause(id: string, reason: QueuePauseReason) {
     const ctx = this.getContext(id);
     if (ctx == null) throw new Error(`Context ${id} not found`);
-
+    await this.emitAsync("pause", id, reason);
     await this._cancel(id, reason);
     this.enqueue(ctx.data, { id: ctx.id, isPaused: true });
   }
@@ -164,8 +170,8 @@ export class Queue extends Observable<QueueEventMap> implements IQueue {
         );
       }
     } else {
-      ctx.cancelReason = reason;
       await this.emitAsync("cancel", id, reason);
+      ctx.cancelReason = reason;
     }
   }
 

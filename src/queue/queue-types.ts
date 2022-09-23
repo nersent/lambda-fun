@@ -33,9 +33,9 @@ export interface IQueue {
 
 export type QueueEventMap = {
   enqueue: (data: any) => Promise<void> | void;
-  pause: (id: string, reason?: any) => Promise<void> | void;
-  resume: (id: string, reason?: any) => Promise<void> | void;
-  cancel: (id: string, reason?: any) => Promise<void> | void;
+  pause: (id: string, reason?: QueuePauseReason) => Promise<void> | void;
+  resume: (id: string) => Promise<void> | void;
+  cancel: (id: string, reason?: QueueCancelReason) => Promise<void> | void;
   resolve: (e: QueueResolveEvent<any>) => Promise<void> | void;
   /**
    * Called when the queue is empty and there is no more items to process.
