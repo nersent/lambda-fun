@@ -5,13 +5,15 @@ export type FunctionWrapper = (
 
 export const wrapFunction = <T extends (...args: any[]) => any>(
   originalFn: T,
-  ...wrappers: FunctionWrapper[]
+  ...wrappers: (FunctionWrapper | undefined)[]
 ): T => {
-  if (wrappers.length === 0) return originalFn;
+  if (wrappers == null || wrappers.length === 0) return originalFn;
+  const _wrappers = [
+    originalFn,
+    ...wrappers.filter((r) => r != null),
+  ] as FunctionWrapper[];
 
-  const _wrappers = [originalFn, ...wrappers].reverse();
-
-  return _wrappers.reduceRight((prevFn, nextFn) => {
+  return _wrappers.reduce((prevFn, nextFn) => {
     return (...args: any) => {
       return nextFn(prevFn, ...args);
     };

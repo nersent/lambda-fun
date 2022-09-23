@@ -29,7 +29,4 @@ export const useThrottleExample = async () => {
       throttler.execute(fn(entry.time, entry.message + " " + index)),
     ),
   );
-  // for (const entry of entries) {
-  //   throttler.execute(fn(entry.time, entry.message), entry.message);
-  // }
 };

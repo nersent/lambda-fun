@@ -1,4 +1,5 @@
-import { threadify, ThreadifyEntry } from "../../src/threadify";
+import { Repeater } from "../../src/repeater/repeater";
+import { threadify } from "../../src/threads/threadify";
 import { delay } from "../../src/utils";
 
 export const useThreadifyRetryExample = async () => {
@@ -7,26 +8,23 @@ export const useThreadifyRetryExample = async () => {
   const res = await threadify(
     {
       threads: 1,
-      repeaterOptions: {
-        maxAttempts: 3,
+      repeater: new Repeater({ maxAttempts: 3 }),
+      onError: {
+        reject: true,
       },
-      rejectOnError: true,
-      queueOptions: { verbose: false, printSteps: true },
     },
-    ...[500, 600, 700, 800].map<ThreadifyEntry>((time, index) => {
-      return {
-        fn: async () => {
-          if (time === 700 && ++tryCounter < 2) {
-            console.log(`Failed ${time}`);
-            throw new Error("Test error");
-          }
-          console.log(time);
-          await delay(time);
-          return time;
-        },
-        time,
+    ...[500, 600, 700, 800].map((time, index) => {
+      return async () => {
+        if (time === 700 && ++tryCounter < 2) {
+          console.log(`Failed ${time}`);
+          throw new Error("Test error");
+        }
+        console.log(time);
+        await delay(time);
+        return time;
       };
     }),
   );
+
   console.log(res);
 };

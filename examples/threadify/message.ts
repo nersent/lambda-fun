@@ -1,4 +1,4 @@
-import { threadify } from "../../src/threadify";
+import { threadify } from "../../src/threads/threadify";
 import { delay } from "../../src/utils";
 
 export const useThreadifyMessageExample = async () => {
@@ -17,7 +17,7 @@ export const useThreadifyMessageExample = async () => {
   const called: string[] = [];
 
   const resolved = await threadify(
-    { threads: 2, queueOptions: { verbose: false } },
+    { threads: 2 },
     ...items.map((data) => async () => {
       called.push(data.char);
       await delay(data.time);

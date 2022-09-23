@@ -1,5 +1,5 @@
 import "jest";
-import { wrapFunction } from "./function";
+import { wrapFunction } from "../function";
 
 describe("Function", () => {
   describe("wrapFunction", () => {
