@@ -1,5 +1,5 @@
 import { ThreadManager } from "../../src/threads/thread-manager";
-import { AsyncQueue } from "../../src/queue/async-queue";
+import { Queue } from "../../src/queue/queue";
 import axios, { CancelTokenSource } from "axios";
 
 export const useQueueNetworkAbortExample = async () => {
@@ -12,7 +12,7 @@ export const useQueueNetworkAbortExample = async () => {
     cancelTokenSource: CancelTokenSource;
   }
 
-  const queue = new AsyncQueue(
+  const queue = new Queue(
     {
       threadManager,
       execute: async ({ data }: { data: Data }) => {

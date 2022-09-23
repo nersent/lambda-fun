@@ -1,9 +1,5 @@
 import { ThreadManager } from "../threads/thread-manager";
-import {
-  AsyncQueue,
-  AsyncQueueExecutionContext,
-  AsyncQueueOptions,
-} from "../queue/async-queue";
+import { Queue, QueueExecutionContext, QueueOptions } from "../queue/queue";
 import { Throttler } from "../throttler/throttler";
 import { Trier } from "../trier/trier";
 import { Repeater } from "../repeater/repeater";
@@ -13,7 +9,7 @@ export type ThreadifyOptions = {
   threads: number;
   repeaterOptions?: RepeaterExecuteOptions;
   throttler?: Throttler;
-  queueOptions?: Partial<AsyncQueueOptions & { verbosePath?: string }>;
+  queueOptions?: Partial<QueueOptions & { verbosePath?: string }>;
   printItemsOnError?: boolean;
 } & (
   | {
@@ -24,7 +20,7 @@ export type ThreadifyOptions = {
     }
 );
 
-interface ThreadifyExecutionContext extends AsyncQueueExecutionContext {
+interface ThreadifyExecutionContext extends QueueExecutionContext {
   data: { fn: (...args: any[]) => Promise<any> };
 }
 
@@ -49,7 +45,7 @@ export const threadify = (
     const repeater =
       options.repeaterOptions != null ? new Repeater() : undefined;
 
-    const queue = new AsyncQueue(
+    const queue = new Queue(
       {
         threadManager,
         execute: ({ data: { fn } }: ThreadifyExecutionContext) => {

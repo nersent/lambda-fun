@@ -1,5 +1,5 @@
 import { ThreadManager } from "../../src/threads/thread-manager";
-import { AsyncQueue } from "../../src/queue/async-queue";
+import { Queue } from "../../src/queue/queue";
 import { delay } from "../../src/utils";
 
 export const useQueuePauseResumeExample = async () => {
@@ -13,7 +13,7 @@ export const useQueuePauseResumeExample = async () => {
     isPaused?: boolean;
   }
 
-  const queue = new AsyncQueue(
+  const queue = new Queue(
     {
       threadManager,
       execute: async ({ data }: { data: QueueEntry }) => {

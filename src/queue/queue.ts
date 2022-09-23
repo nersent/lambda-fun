@@ -7,24 +7,24 @@ import {
   QueueCancelReason,
   QueueEnqueueOptions,
   QueueEventMap,
-  QueueExecutionContext,
+  QueueExecutionContext as IQueueExecutionContext,
   QueuePauseReason,
   QueueResolveEvent,
 } from "./queue-types";
 import { Logger } from "../logger/logger";
 
-export interface AsyncQueueEntry {
+export interface QueueEntry {
   id: string;
   data: any;
   isPaused?: boolean;
 }
 
-export interface AsyncQueueExecutionContext extends QueueExecutionContext {
+export interface QueueExecutionContext extends IQueueExecutionContext {
   data: any;
   cancelReason?: QueueCancelReason;
 }
 
-export type AsyncQueueLogType =
+export type QueueLogType =
   | "enqueue"
   | "tick"
   | "flush-threads"
@@ -47,27 +47,27 @@ export type AsyncQueueLogType =
   | "tick-loop-start"
   | "tick-loop-end";
 
-export interface AsyncQueueDelegates {
+export interface QueueDelegates {
   readonly threadManager: IThreadManager;
-  readonly execute: (ctx: AsyncQueueExecutionContext) => Promise<any> | any;
+  readonly execute: (ctx: QueueExecutionContext) => Promise<any> | any;
 }
 
-export interface AsyncQueueOptions {
+export interface QueueOptions {
   verbose?: boolean;
   printSteps?: boolean;
   verbosePath?: string;
 }
 
-export class AsyncQueue extends Observable<QueueEventMap> implements IQueue {
-  private queue: AsyncQueueEntry[] = [];
+export class Queue extends Observable<QueueEventMap> implements IQueue {
+  private queue: QueueEntry[] = [];
 
-  private readonly contextMap = new Map<string, AsyncQueueExecutionContext>();
+  private readonly contextMap = new Map<string, QueueExecutionContext>();
 
-  private readonly logger: Logger<AsyncQueueLogType> | undefined = undefined;
+  private readonly logger: Logger<QueueLogType> | undefined = undefined;
 
   constructor(
-    private readonly delegates: AsyncQueueDelegates,
-    private readonly options?: AsyncQueueOptions,
+    private readonly delegates: QueueDelegates,
+    private readonly options?: QueueOptions,
   ) {
     super();
     if (options?.verbose) {
@@ -80,13 +80,13 @@ export class AsyncQueue extends Observable<QueueEventMap> implements IQueue {
     this.queue = [];
   }
 
-  public getContext(id: string): AsyncQueueExecutionContext | undefined {
+  public getContext(id: string): QueueExecutionContext | undefined {
     return this.contextMap.get(id);
   }
 
   public enqueue(data: any, options?: QueueEnqueueOptions | undefined): string {
     const id = options?.id ?? makeId();
-    const entry: AsyncQueueEntry = { id, data, isPaused: options?.isPaused };
+    const entry: QueueEntry = { id, data, isPaused: options?.isPaused };
     this.logger?.log("enqueue", { entry, options });
     if (options?.first) {
       this.queue.unshift(entry);
@@ -261,7 +261,7 @@ export class AsyncQueue extends Observable<QueueEventMap> implements IQueue {
 
       this.queue.splice(queueEntryIndex, 1);
 
-      const ctx: AsyncQueueExecutionContext = {
+      const ctx: QueueExecutionContext = {
         id: queueEntry.id,
         threadId: thread.getId(),
         data: queueEntry.data,
@@ -304,7 +304,7 @@ export class AsyncQueue extends Observable<QueueEventMap> implements IQueue {
     //     break;
     //   }
 
-    //   const ctx: AsyncQueueExecutionContext = {
+    //   const ctx: QueueExecutionContext = {
     //     id: entry.id,
     //     threadId: thread.getId(),
     //     data: entry.data,
@@ -316,7 +316,7 @@ export class AsyncQueue extends Observable<QueueEventMap> implements IQueue {
     // }
   }
 
-  protected executeOnThread(thread: IThread, ctx: AsyncQueueExecutionContext) {
+  protected executeOnThread(thread: IThread, ctx: QueueExecutionContext) {
     this.logger?.log("execution-call", { ctx });
     thread
       .execute({
