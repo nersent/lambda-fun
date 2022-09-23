@@ -1,11 +1,11 @@
-import { ThreadManager } from "../../src/threads/thread-manager";
 import { Queue } from "../../src/queue/queue";
 import axios, { CancelTokenSource } from "axios";
+import { ThreadPool } from "../../src/threads/thread-pool";
 
 export const useQueueNetworkAbortExample = async () => {
-  const threadManager = new ThreadManager();
+  const threadPool = new ThreadPool();
 
-  await threadManager.setThreadsCount(1);
+  await threadPool.setPoolSize(1);
 
   interface Data {
     url: string;
@@ -14,7 +14,7 @@ export const useQueueNetworkAbortExample = async () => {
 
   const queue = new Queue(
     {
-      threadManager,
+      threadPool,
       execute: async ({ data }: { data: Data }) => {
         try {
           const { status } = await axios.get(data.url, {

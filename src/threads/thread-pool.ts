@@ -1,15 +1,15 @@
 import { Observable } from "../observable/observable";
 import { Thread } from "./thread";
-import { IThreadManager, ThreadManagerEventMap } from "./thread-manager-types";
+import { IThreadPool, ThreadPoolEventMap } from "./thread-pool-types";
 import { IThread, ThreadStatus } from "./thread-types";
 
-export class ThreadManager
-  extends Observable<ThreadManagerEventMap>
-  implements IThreadManager
+export class ThreadPool
+  extends Observable<ThreadPoolEventMap>
+  implements IThreadPool
 {
   private threadMap = new Map<string, IThread>();
 
-  private _threadCount = 0;
+  private _poolSize = 0;
 
   private get _threadMapCount() {
     return this.threadMap.size;
@@ -31,11 +31,11 @@ export class ThreadManager
     return this._threads.find((r) => r.isValidForExecution(ctx));
   }
 
-  public getThreadsCount(): number {
-    return this._threadCount;
+  public getPoolSize(): number {
+    return this._poolSize;
   }
 
-  public async setThreadsCount(count: number) {
+  public async setPoolSize(count: number) {
     if (this._threadMapCount === count) {
       this._threads.map((r) => r.setStatus(ThreadStatus.Available));
     } else if (this._threadMapCount < count) {
@@ -75,7 +75,7 @@ export class ThreadManager
       killedThreads.forEach((r) => r.setStatus(ThreadStatus.Killed));
     }
 
-    this._threadCount = count;
+    this._poolSize = count;
   }
 
   public async createThread(): Promise<IThread> {

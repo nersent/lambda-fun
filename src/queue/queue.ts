@@ -1,4 +1,3 @@
-import { IThreadManager } from "../threads/thread-manager-types";
 import { Observable } from "../observable/observable";
 import { IThread } from "../threads/thread-types";
 import { makeId } from "../utils";
@@ -12,6 +11,7 @@ import {
   QueueResolveEvent,
 } from "./queue-types";
 import { Logger } from "../logger/logger";
+import { IThreadPool } from "../threads/thread-pool-types";
 
 export interface QueueEntry {
   id: string;
@@ -52,7 +52,7 @@ export type QueueLogType =
   | "tick-loop-end";
 
 export interface QueueDelegates {
-  readonly threadManager: IThreadManager;
+  readonly threadPool: IThreadPool;
   readonly execute: (ctx: QueueExecutionContext) => Promise<any> | any;
 }
 
@@ -216,14 +216,14 @@ export class Queue extends Observable<QueueEventMap> implements IQueue {
   public tick(): void {
     this.logger?.log("tick", { queue: this.queue });
     this.logger?.log("flush-threads", {
-      threads: this.delegates.threadManager.getThreads(),
+      threads: this.delegates.threadPool.getThreads(),
     });
-    this.delegates.threadManager.flush();
+    this.delegates.threadPool.flush();
 
     if (this.queue.length === 0) {
       this.logger?.log("empty-queue");
 
-      const executingThreads = this.delegates.threadManager
+      const executingThreads = this.delegates.threadPool
         .getThreads()
         .filter((r) => r.isExecuting());
       if (executingThreads.length === 0) {
@@ -256,7 +256,7 @@ export class Queue extends Observable<QueueEventMap> implements IQueue {
         throw new Error("Queue entry index is invalid");
       }
 
-      const thread = this.delegates.threadManager.findExecutableThread({});
+      const thread = this.delegates.threadPool.findExecutableThread({});
 
       if (thread == null) {
         this.logger?.log("no-executable-thread", {

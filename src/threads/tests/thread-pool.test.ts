@@ -1,6 +1,6 @@
 import "jest";
 import { Thread } from "../thread";
-import { ThreadManager } from "../thread-manager";
+import { ThreadPool } from "../thread-pool";
 import { IThread, ThreadExecutionStatus, ThreadStatus } from "../thread-types";
 
 interface CreateThreadOptions {
@@ -18,19 +18,19 @@ const createThread = ({ id, status, executionStatus }: CreateThreadOptions) => {
 };
 
 const setThreadMap = (
-  instance: ThreadManager,
+  instance: ThreadPool,
   ...threads: CreateThreadOptions[]
 ) => {
   instance["threadMap"] = new Map<string, IThread>(
     threads.map((thread) => [thread["id"], createThread(thread)]),
   );
-  instance["_threadCount"] = threads.length;
+  instance["_poolSize"] = threads.length;
 };
 
-describe("ThreadManager Impl", () => {
+describe("ThreadPool Impl", () => {
   describe("findExecutableThread", () => {
     it("returns executable thread", async () => {
-      const instance = new ThreadManager();
+      const instance = new ThreadPool();
       {
         setThreadMap(
           instance,
@@ -149,13 +149,13 @@ describe("ThreadManager Impl", () => {
   describe("setThreadsCount", () => {
     describe("if count is more than thread manager count, then creates additional threads and marks as available", () => {
       it("supports all available threads", async () => {
-        const instance = new ThreadManager();
+        const instance = new ThreadPool();
         setThreadMap(instance, {
           id: "a",
           status: ThreadStatus.Available,
           executionStatus: ThreadExecutionStatus.None,
         });
-        await instance.setThreadsCount(2);
+        await instance.setPoolSize(2);
         expect(instance["_threads"][0].getStatus()).toEqual(
           ThreadStatus.Available,
         );
@@ -165,7 +165,7 @@ describe("ThreadManager Impl", () => {
       });
 
       it("supports killed threads", async () => {
-        const instance = new ThreadManager();
+        const instance = new ThreadPool();
         setThreadMap(
           instance,
           {
@@ -179,7 +179,7 @@ describe("ThreadManager Impl", () => {
             executionStatus: ThreadExecutionStatus.None,
           },
         );
-        await instance.setThreadsCount(3);
+        await instance.setPoolSize(3);
         expect(instance["_threads"][0].getStatus()).toEqual(
           ThreadStatus.Available,
         );
@@ -195,7 +195,7 @@ describe("ThreadManager Impl", () => {
     describe("if count is less than thread manager count, then marks threads as killed", () => {
       describe("are threads are not executing", () => {
         it("all threads are available", async () => {
-          const instance = new ThreadManager();
+          const instance = new ThreadPool();
           setThreadMap(
             instance,
             {
@@ -214,7 +214,7 @@ describe("ThreadManager Impl", () => {
               executionStatus: ThreadExecutionStatus.None,
             },
           );
-          await instance.setThreadsCount(1);
+          await instance.setPoolSize(1);
           expect(instance["_threads"][0].getStatus()).toEqual(
             ThreadStatus.Killed,
           );
@@ -227,7 +227,7 @@ describe("ThreadManager Impl", () => {
         });
 
         it("first thread is killed", async () => {
-          const instance = new ThreadManager();
+          const instance = new ThreadPool();
           setThreadMap(
             instance,
             {
@@ -246,7 +246,7 @@ describe("ThreadManager Impl", () => {
               executionStatus: ThreadExecutionStatus.None,
             },
           );
-          await instance.setThreadsCount(1);
+          await instance.setPoolSize(1);
           expect(instance["_threads"][0].getStatus()).toEqual(
             ThreadStatus.Killed,
           );
@@ -259,7 +259,7 @@ describe("ThreadManager Impl", () => {
         });
 
         it("all threads are killed", async () => {
-          const instance = new ThreadManager();
+          const instance = new ThreadPool();
           setThreadMap(
             instance,
             {
@@ -278,7 +278,7 @@ describe("ThreadManager Impl", () => {
               executionStatus: ThreadExecutionStatus.None,
             },
           );
-          await instance.setThreadsCount(1);
+          await instance.setPoolSize(1);
           expect(instance["_threads"][0].getStatus()).toEqual(
             ThreadStatus.Killed,
           );
@@ -291,7 +291,7 @@ describe("ThreadManager Impl", () => {
         });
 
         it("only first thread is killed", async () => {
-          const instance = new ThreadManager();
+          const instance = new ThreadPool();
           setThreadMap(
             instance,
             {
@@ -310,7 +310,7 @@ describe("ThreadManager Impl", () => {
               executionStatus: ThreadExecutionStatus.None,
             },
           );
-          await instance.setThreadsCount(1);
+          await instance.setPoolSize(1);
           expect(instance["_threads"][0].getStatus()).toEqual(
             ThreadStatus.Killed,
           );
@@ -325,7 +325,7 @@ describe("ThreadManager Impl", () => {
 
       describe("every thread is pending", () => {
         it("first thread is available", async () => {
-          const instance = new ThreadManager();
+          const instance = new ThreadPool();
           setThreadMap(
             instance,
             {
@@ -344,7 +344,7 @@ describe("ThreadManager Impl", () => {
               executionStatus: ThreadExecutionStatus.Pending,
             },
           );
-          await instance.setThreadsCount(1);
+          await instance.setPoolSize(1);
           expect(instance["_threads"][0].getStatus()).toEqual(
             ThreadStatus.Killed,
           );
@@ -357,7 +357,7 @@ describe("ThreadManager Impl", () => {
         });
 
         it("first thread is killed", async () => {
-          const instance = new ThreadManager();
+          const instance = new ThreadPool();
           setThreadMap(
             instance,
             {
@@ -376,7 +376,7 @@ describe("ThreadManager Impl", () => {
               executionStatus: ThreadExecutionStatus.Pending,
             },
           );
-          await instance.setThreadsCount(1);
+          await instance.setPoolSize(1);
           expect(instance["_threads"][0].getStatus()).toEqual(
             ThreadStatus.Killed,
           );
@@ -389,7 +389,7 @@ describe("ThreadManager Impl", () => {
         });
 
         it("first and second threads are killed", async () => {
-          const instance = new ThreadManager();
+          const instance = new ThreadPool();
           setThreadMap(
             instance,
             {
@@ -408,7 +408,7 @@ describe("ThreadManager Impl", () => {
               executionStatus: ThreadExecutionStatus.Pending,
             },
           );
-          await instance.setThreadsCount(1);
+          await instance.setPoolSize(1);
           expect(instance["_threads"][0].getStatus()).toEqual(
             ThreadStatus.Killed,
           );
@@ -421,7 +421,7 @@ describe("ThreadManager Impl", () => {
         });
 
         it("every thread is killed", async () => {
-          const instance = new ThreadManager();
+          const instance = new ThreadPool();
           setThreadMap(
             instance,
             {
@@ -440,7 +440,7 @@ describe("ThreadManager Impl", () => {
               executionStatus: ThreadExecutionStatus.Pending,
             },
           );
-          await instance.setThreadsCount(1);
+          await instance.setPoolSize(1);
           expect(instance["_threads"][0].getStatus()).toEqual(
             ThreadStatus.Killed,
           );
@@ -453,7 +453,7 @@ describe("ThreadManager Impl", () => {
         });
 
         it("last thread is killed and rest is available", async () => {
-          const instance = new ThreadManager();
+          const instance = new ThreadPool();
           setThreadMap(
             instance,
             {
@@ -472,7 +472,7 @@ describe("ThreadManager Impl", () => {
               executionStatus: ThreadExecutionStatus.Pending,
             },
           );
-          await instance.setThreadsCount(1);
+          await instance.setPoolSize(1);
           expect(instance["_threads"][0].getStatus()).toEqual(
             ThreadStatus.Killed,
           );
@@ -487,7 +487,7 @@ describe("ThreadManager Impl", () => {
 
       describe("thread execution status is mixed", () => {
         it("first thread is pending and rest are free", async () => {
-          const instance = new ThreadManager();
+          const instance = new ThreadPool();
           setThreadMap(
             instance,
             {
@@ -506,7 +506,7 @@ describe("ThreadManager Impl", () => {
               executionStatus: ThreadExecutionStatus.None,
             },
           );
-          await instance.setThreadsCount(1);
+          await instance.setPoolSize(1);
           expect(instance["_threads"][0].getStatus()).toEqual(
             ThreadStatus.Available,
           );
@@ -519,7 +519,7 @@ describe("ThreadManager Impl", () => {
         });
 
         it("first thread is pending and killed and rest are free", async () => {
-          const instance = new ThreadManager();
+          const instance = new ThreadPool();
           setThreadMap(
             instance,
             {
@@ -538,7 +538,7 @@ describe("ThreadManager Impl", () => {
               executionStatus: ThreadExecutionStatus.None,
             },
           );
-          await instance.setThreadsCount(1);
+          await instance.setPoolSize(1);
           expect(instance["_threads"][0].getStatus()).toEqual(
             ThreadStatus.Available,
           );
@@ -552,7 +552,7 @@ describe("ThreadManager Impl", () => {
       });
 
       it("second thread is pending and rest are free", async () => {
-        const instance = new ThreadManager();
+        const instance = new ThreadPool();
         setThreadMap(
           instance,
           {
@@ -571,7 +571,7 @@ describe("ThreadManager Impl", () => {
             executionStatus: ThreadExecutionStatus.None,
           },
         );
-        await instance.setThreadsCount(1);
+        await instance.setPoolSize(1);
         expect(instance["_threads"][0].getStatus()).toEqual(
           ThreadStatus.Killed,
         );
@@ -584,7 +584,7 @@ describe("ThreadManager Impl", () => {
       });
 
       it("second thread is pending and killed and rest are free", async () => {
-        const instance = new ThreadManager();
+        const instance = new ThreadPool();
         setThreadMap(
           instance,
           {
@@ -603,7 +603,7 @@ describe("ThreadManager Impl", () => {
             executionStatus: ThreadExecutionStatus.None,
           },
         );
-        await instance.setThreadsCount(1);
+        await instance.setPoolSize(1);
         expect(instance["_threads"][0].getStatus()).toEqual(
           ThreadStatus.Killed,
         );
@@ -616,7 +616,7 @@ describe("ThreadManager Impl", () => {
       });
 
       it("last thread is pending and rest are free", async () => {
-        const instance = new ThreadManager();
+        const instance = new ThreadPool();
         setThreadMap(
           instance,
           {
@@ -635,7 +635,7 @@ describe("ThreadManager Impl", () => {
             executionStatus: ThreadExecutionStatus.Pending,
           },
         );
-        await instance.setThreadsCount(1);
+        await instance.setPoolSize(1);
         expect(instance["_threads"][0].getStatus()).toEqual(
           ThreadStatus.Killed,
         );
@@ -648,7 +648,7 @@ describe("ThreadManager Impl", () => {
       });
 
       it("last thread is pending and killed and rest are free", async () => {
-        const instance = new ThreadManager();
+        const instance = new ThreadPool();
         setThreadMap(
           instance,
           {
@@ -667,7 +667,7 @@ describe("ThreadManager Impl", () => {
             executionStatus: ThreadExecutionStatus.Pending,
           },
         );
-        await instance.setThreadsCount(1);
+        await instance.setPoolSize(1);
         expect(instance["_threads"][0].getStatus()).toEqual(
           ThreadStatus.Killed,
         );
@@ -681,7 +681,7 @@ describe("ThreadManager Impl", () => {
     });
 
     it("if count is zero, then every thread is market as killed", async () => {
-      const instance = new ThreadManager();
+      const instance = new ThreadPool();
       setThreadMap(
         instance,
         {
@@ -700,20 +700,20 @@ describe("ThreadManager Impl", () => {
           executionStatus: ThreadExecutionStatus.Pending,
         },
       );
-      await instance.setThreadsCount(0);
+      await instance.setPoolSize(0);
       expect(instance["_threads"][0].getStatus()).toEqual(ThreadStatus.Killed);
       expect(instance["_threads"][1].getStatus()).toEqual(ThreadStatus.Killed);
       expect(instance["_threads"][2].getStatus()).toEqual(ThreadStatus.Killed);
     });
 
     it("if count is the same as current count", async () => {
-      const instance = new ThreadManager();
+      const instance = new ThreadPool();
       setThreadMap(instance, {
         id: "a",
         status: ThreadStatus.Killed,
         executionStatus: ThreadExecutionStatus.Pending,
       });
-      await instance.setThreadsCount(1);
+      await instance.setPoolSize(1);
       expect(instance["_threads"][0].getStatus()).toEqual(
         ThreadStatus.Available,
       );
@@ -722,7 +722,7 @@ describe("ThreadManager Impl", () => {
 
   describe("flush", () => {
     it("removed killed and not executing threads", async () => {
-      const instance = new ThreadManager();
+      const instance = new ThreadPool();
       setThreadMap(
         instance,
         {

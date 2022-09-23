@@ -1,14 +1,14 @@
 import { IThread } from "./thread-types";
 
-export interface IThreadManager {
+export interface IThreadPool {
   /**
    * Returns the number of total usable threads.
    */
-  getThreadsCount(): number;
+  getPoolSize(): number;
   /**
    * Sets the number of total usable threads.
    */
-  setThreadsCount(count: number): Promise<void>;
+  setPoolSize(count: number): Promise<void>;
   getThreads(): IThread[];
   getThread(id: string): IThread | undefined;
   createThread(): Promise<IThread> | IThread;
@@ -23,7 +23,7 @@ export interface IThreadManager {
   flush(): Promise<void>;
 }
 
-export type ThreadManagerEventMap = {
+export type ThreadPoolEventMap = {
   createThread: (id: string) => Promise<void> | void;
   deleteThread: (id: string) => Promise<void> | void;
 };

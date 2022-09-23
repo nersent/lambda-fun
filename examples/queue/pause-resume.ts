@@ -1,11 +1,11 @@
-import { ThreadManager } from "../../src/threads/thread-manager";
+import { ThreadPool } from "../../src/threads/thread-pool";
 import { Queue } from "../../src/queue/queue";
 import { delay } from "../../src/utils";
 
 export const useQueuePauseResumeExample = async () => {
-  const threadManager = new ThreadManager();
+  const threadPool = new ThreadPool();
 
-  await threadManager.setThreadsCount(1);
+  await threadPool.setPoolSize(1);
 
   interface QueueEntry {
     text: string;
@@ -15,7 +15,7 @@ export const useQueuePauseResumeExample = async () => {
 
   const queue = new Queue(
     {
-      threadManager,
+      threadPool,
       execute: async ({ data }: { data: QueueEntry }) => {
         console.log(`[${data.text}]: called`);
         await delay(data.time);
