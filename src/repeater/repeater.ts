@@ -1,12 +1,11 @@
 import { delay } from "../utils";
-import { IRepeater, RepeaterExecuteOptions } from "./repeater-types";
+import { IRepeater, RepeaterOptions } from "./repeater-types";
 
 export class Repeater implements IRepeater {
-  public async execute<T>(
-    fn: (...args: any[]) => T,
-    options?: RepeaterExecuteOptions,
-  ) {
-    const maxAttempts = options?.maxAttempts ?? 1;
+  constructor(public readonly options?: RepeaterOptions) {}
+
+  public async execute<T>(fn: (...args: any[]) => T) {
+    const maxAttempts = this.options?.maxAttempts ?? 1;
     if (maxAttempts <= 0) return;
 
     let currentAttempt = 0;
@@ -22,23 +21,23 @@ export class Repeater implements IRepeater {
       } catch (err) {
         error = err;
         currentAttempt++;
-        if (options?.timeout != null) {
-          await delay(options.timeout);
+        if (this.options?.timeout != null) {
+          await delay(this.options.timeout);
         }
       }
     }
 
     if (error != null && !success) {
-      if (options?.onMaxAttemptsExceeded != null) {
+      if (this.options?.onMaxAttemptsExceeded != null) {
         if (
-          "returnUndefined" in options.onMaxAttemptsExceeded &&
-          options.onMaxAttemptsExceeded.returnUndefined
+          "returnUndefined" in this.options.onMaxAttemptsExceeded &&
+          this.options.onMaxAttemptsExceeded.returnUndefined
         ) {
           return undefined;
         }
         if (
-          "exitProcess" in options.onMaxAttemptsExceeded &&
-          options.onMaxAttemptsExceeded.exitProcess
+          "exitProcess" in this.options.onMaxAttemptsExceeded &&
+          this.options.onMaxAttemptsExceeded.exitProcess
         ) {
           console.error(error);
           process.exit();

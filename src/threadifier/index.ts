@@ -3,11 +3,10 @@ import { Queue, QueueExecutionContext, QueueOptions } from "../queue/queue";
 import { Throttler } from "../throttler/throttler";
 import { Trier } from "../trier/trier";
 import { Repeater } from "../repeater/repeater";
-import { RepeaterExecuteOptions } from "../repeater/repeater-types";
 
 export type ThreadifyOptions = {
   threads: number;
-  repeaterOptions?: RepeaterExecuteOptions;
+  repeaterOptions?: any; // RepeaterExecuteOptions
   throttler?: Throttler;
   queueOptions?: Partial<QueueOptions & { verbosePath?: string }>;
   printItemsOnError?: boolean;
@@ -93,12 +92,12 @@ export const threadify = (
     const wrapFn =
       (fn: (...args: any[]) => any) =>
       (...args: any[]) => {
-        if (options.throttler != null && repeater != null) {
-          return repeater.execute(
-            () => options.throttler!.execute(() => fn(...args)),
-            options.repeaterOptions,
-          );
-        }
+        // if (options.throttler != null && repeater != null) {
+        //   return repeater.execute(
+        //     () => options.throttler!.execute(() => fn(...args)),
+        //     options.repeaterOptions,
+        //   );
+        // }
         if (options.throttler == null && repeater == null) {
           return fn(...args);
         }
