@@ -8,7 +8,7 @@ export const useThreadifyRetryAndThrottleExample = async () => {
   const res = await threadify(
     {
       threads: 1,
-      throttler: new Throttler({ count: 1, time: 5000 }), // 2 executions per 500 miliseconds
+      throttler: new Throttler({ count: 1, time: 5000 }), // 1 execution per 5 seconds
       repeater: new Repeater({ maxAttempts: 3 }),
     },
     ...[500, 600, 700, 800].map((time, index) => {
