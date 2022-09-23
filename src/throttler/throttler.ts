@@ -1,11 +1,11 @@
 import { makeId } from "../utils";
-import { QueueEventRecorder } from "../queue/queue-event-recorder";
 import { Observable } from "../observable/observable";
 import {
   IThrottler,
   ThrottlerEventMap,
   ThrottlerOptions,
 } from "./throttler-types";
+import { Logger } from "../logger/logger";
 
 export interface ThrottlerQueueEntry {
   id: string;
@@ -19,7 +19,7 @@ export interface ThrottlerBatchEntry {
   hasFinished: boolean;
 }
 
-export type ThrottlerEventRecorderType =
+export type ThrottlerLogType =
   | "free-batch"
   | "reset-batch"
   | "handler-clear"
@@ -48,8 +48,7 @@ export class Throttler
 
   private timeout: NodeJS.Timeout | undefined = undefined;
 
-  private recorder: QueueEventRecorder<ThrottlerEventRecorderType> | undefined =
-    undefined;
+  private logger: Logger<ThrottlerLogType> | undefined = undefined;
 
   constructor(public readonly options: ThrottlerOptions) {
     super();
@@ -60,7 +59,7 @@ export class Throttler
   }
 
   private freeBatch(now: number = Date.now()) {
-    this.recorder?.register("free-batch", {
+    this.logger?.log("free-batch", {
       batch: this.batch,
       queue: this.queue,
       now,
@@ -81,7 +80,7 @@ export class Throttler
 
       const delta = now - this.batchLongestEndTime;
 
-      this.recorder?.register("reset-batch-request", {
+      this.logger?.log("reset-batch-request", {
         now,
         delta,
         optionsTime: this.options.time,
@@ -89,7 +88,7 @@ export class Throttler
       });
 
       if (delta >= this.options.time) {
-        this.recorder?.register("reset-batch", {
+        this.logger?.log("reset-batch", {
           now,
           delta,
           optionsTime: this.options.time,
@@ -111,14 +110,14 @@ export class Throttler
   }
 
   private tick() {
-    this.recorder?.register("tick");
+    this.logger?.log("tick");
 
     while (true) {
       if (this.isLocked()) {
         clearTimeout(this.timeout);
 
         const canProceed = this.freeBatch();
-        this.recorder?.register("tick-is-locked", {
+        this.logger?.log("tick-is-locked", {
           canProceed,
           batchLongestEndTime: this.batchLongestEndTime,
         });
@@ -127,14 +126,14 @@ export class Throttler
           if (this.batchLongestEndTime != null) {
             const now = Date.now();
             const delta = this.batchLongestEndTime + this.options.time - now;
-            this.recorder?.register("set-timeout", {
+            this.logger?.log("set-timeout", {
               now,
               delta,
               optionsTime: this.options.time,
             });
             if (delta > 0) {
               this.timeout = setTimeout(() => {
-                this.recorder?.register("timeout-fired", { delta });
+                this.logger?.log("timeout-fired", { delta });
                 this.tick();
               }, delta);
             }
@@ -147,7 +146,7 @@ export class Throttler
 
       const queueEntry = this.queue.shift();
       if (queueEntry == null) {
-        this.recorder?.register("tick-queue-empty");
+        this.logger?.log("tick-queue-empty");
         return;
       }
 
@@ -165,11 +164,11 @@ export class Throttler
     batchEntry: ThrottlerBatchEntry,
     queueEntry: ThrottlerQueueEntry,
   ) {
-    this.recorder?.register("execute-batch-entry", { batchEntry });
+    this.logger?.log("execute-batch-entry", { batchEntry });
 
     batchEntry.startTime = Date.now();
 
-    this.recorder?.register("before-execution", {
+    this.logger?.log("before-execution", {
       batchEntry,
       queueEntry,
       batch: this.batch,
@@ -185,7 +184,7 @@ export class Throttler
       error = e;
     }
 
-    this.recorder?.register("after-execution", { batchEntry, queueEntry });
+    this.logger?.log("after-execution", { batchEntry, queueEntry });
 
     batchEntry.endTime = Date.now();
     batchEntry.hasFinished = true;
@@ -196,7 +195,7 @@ export class Throttler
       this.batchLongestEndTime = batchEntry.endTime;
     }
 
-    this.recorder?.register("resolve", {
+    this.logger?.log("resolve", {
       batchEntry,
       queueEntry,
       queue: this.queue,
@@ -210,13 +209,13 @@ export class Throttler
 
     const promise = new Promise<any>(async (resolve, reject) => {
       const clear = () => {
-        this.recorder?.register("handler-clear", { id });
+        this.logger?.log("handler-clear", { id });
         this.removeListener("resolve", onResolve);
       };
 
       const onResolve = (eventId: string, error?: any, res?: any) => {
         if (eventId !== id) return;
-        this.recorder?.register("handler-resolved", { id, error, res });
+        this.logger?.log("handler-resolved", { id, error, res });
         clear();
         if (error != null) return reject(error);
         resolve(res);
@@ -225,7 +224,7 @@ export class Throttler
       this.addListener("resolve", onResolve);
     });
 
-    this.recorder?.register("execute-tick-call", { id });
+    this.logger?.log("execute-tick-call", { id });
     this.tick();
 
     return await promise;

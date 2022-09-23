@@ -1,16 +1,17 @@
+import { IThreadManager } from "../threads/thread-manager-types";
 import { Observable } from "../observable/observable";
-import { IThread, IThreadManager } from "../threads/thread-types";
+import { IThread } from "../threads/thread-types";
 import { makeId } from "../utils";
-import { QueueEventRecorder } from "./queue-event-recorder";
 import {
-  Queue,
+  IQueue,
   QueueCancelReason,
   QueueEnqueueOptions,
+  QueueEventMap,
   QueueExecutionContext,
-  QueueObserverMap,
   QueuePauseReason,
   QueueResolveEvent,
 } from "./queue-types";
+import { Logger } from "../logger/logger";
 
 export interface AsyncQueueEntry {
   id: string;
@@ -23,7 +24,7 @@ export interface AsyncQueueExecutionContext extends QueueExecutionContext {
   cancelReason?: QueueCancelReason;
 }
 
-export type AsyncQueueEventRecorderType =
+export type AsyncQueueLogType =
   | "enqueue"
   | "tick"
   | "flush-threads"
@@ -57,14 +58,12 @@ export interface AsyncQueueOptions {
   verbosePath?: string;
 }
 
-export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
+export class AsyncQueue extends Observable<QueueEventMap> implements IQueue {
   private queue: AsyncQueueEntry[] = [];
 
   private readonly contextMap = new Map<string, AsyncQueueExecutionContext>();
 
-  private readonly eventRecorder:
-    | QueueEventRecorder<AsyncQueueEventRecorderType>
-    | undefined = undefined;
+  private readonly logger: Logger<AsyncQueueLogType> | undefined = undefined;
 
   constructor(
     private readonly delegates: AsyncQueueDelegates,
@@ -72,12 +71,12 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
   ) {
     super();
     if (options?.verbose) {
-      this.eventRecorder = new QueueEventRecorder(options.printSteps);
+      this.logger = new Logger({ print: options.printSteps });
     }
   }
 
   public clear() {
-    this.eventRecorder?.register("clear");
+    this.logger?.log("clear");
     this.queue = [];
   }
 
@@ -88,7 +87,7 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
   public enqueue(data: any, options?: QueueEnqueueOptions | undefined): string {
     const id = options?.id ?? makeId();
     const entry: AsyncQueueEntry = { id, data, isPaused: options?.isPaused };
-    this.eventRecorder?.register("enqueue", { entry, options });
+    this.logger?.log("enqueue", { entry, options });
     if (options?.first) {
       this.queue.unshift(entry);
     } else {
@@ -136,7 +135,7 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
     }
 
     entry.isPaused = false;
-    this.eventRecorder?.register("resume", { entry, first });
+    this.logger?.log("resume", { entry, first });
     this.tick();
   }
 
@@ -154,7 +153,7 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
     if (ctx == null) {
       const queueIndex = this.queue.findIndex((r) => r.id);
       if (queueIndex >= 0) {
-        this.eventRecorder?.register("cancel-remove-from-queue", {
+        this.logger?.log("cancel-remove-from-queue", {
           index: queueIndex,
           queue: this.queue,
         });
@@ -174,8 +173,8 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
     return this.contextMap.has(id) || this.queue.some((r) => r.id === id);
   }
 
-  public getLogs() {
-    return this.eventRecorder?.events;
+  public getLogger() {
+    return this.logger;
   }
 
   public wait(id: string) {
@@ -209,23 +208,22 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
   }
 
   public tick(): void {
-    this.eventRecorder?.register("tick", { queue: this.queue });
-
-    this.eventRecorder?.register("flush-threads", {
+    this.logger?.log("tick", { queue: this.queue });
+    this.logger?.log("flush-threads", {
       threads: this.delegates.threadManager.getThreads(),
     });
     this.delegates.threadManager.flush();
 
     if (this.queue.length === 0) {
-      this.eventRecorder?.register("empty-queue");
+      this.logger?.log("empty-queue");
 
       const executingThreads = this.delegates.threadManager
         .getThreads()
         .filter((r) => r.isExecuting());
       if (executingThreads.length === 0) {
-        this.eventRecorder?.register("done");
+        this.logger?.log("done");
         this.emit("finish");
-        this.eventRecorder?.print();
+        this.logger?.print();
         return;
       }
       return;
@@ -238,11 +236,11 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
     // }
     const queueCopy = [...this.queue];
 
-    this.eventRecorder?.register("tick-loop-start", { queueCopy });
+    this.logger?.log("tick-loop-start", { queueCopy });
 
     for (const queueEntry of queueCopy) {
       if (queueEntry.isPaused) {
-        this.eventRecorder?.register("omit-paused", { queueEntry });
+        this.logger?.log("omit-paused", { queueEntry });
         continue;
       }
 
@@ -255,7 +253,7 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
       const thread = this.delegates.threadManager.findExecutableThread({});
 
       if (thread == null) {
-        this.eventRecorder?.register("no-executable-thread", {
+        this.logger?.log("no-executable-thread", {
           entry: queueEntry,
         });
         break;
@@ -269,12 +267,12 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
         data: queueEntry.data,
       };
 
-      this.eventRecorder?.register("before-execution", { ctx });
+      this.logger?.log("before-execution", { ctx });
       this.contextMap.set(queueEntry.id, ctx);
       this.executeOnThread(thread, ctx);
     }
 
-    this.eventRecorder?.register("tick-loop-end");
+    this.logger?.log("tick-loop-end");
 
     // eslint-disable-next-line no-constant-condition
     // while (true) {
@@ -319,18 +317,18 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
   }
 
   protected executeOnThread(thread: IThread, ctx: AsyncQueueExecutionContext) {
-    this.eventRecorder?.register("execution-call", { ctx });
+    this.logger?.log("execution-call", { ctx });
     thread
       .execute({
         fn: async () => {
-          this.eventRecorder?.register("execution", { ctx });
+          this.logger?.log("execution", { ctx });
           const res = await this.delegates.execute(ctx);
-          this.eventRecorder?.register("execution-callback", { ctx, res });
+          this.logger?.log("execution-callback", { ctx, res });
           return res;
         },
       })
       .then(async (res) => {
-        this.eventRecorder?.register("after-execution", { ctx, res });
+        this.logger?.log("after-execution", { ctx, res });
 
         let resolveEvent: Partial<QueueResolveEvent<any>> = {
           id: ctx.id,
@@ -351,15 +349,15 @@ export class AsyncQueue extends Observable<QueueObserverMap> implements Queue {
           resolveEvent = { ...resolveEvent, data: res.data };
         }
 
-        this.eventRecorder?.register("emit-resolve", {
+        this.logger?.log("emit-resolve", {
           ...resolveEvent,
           queue: undefined,
         });
         await this.emitAsync("resolve", resolveEvent as QueueResolveEvent<any>);
 
-        this.eventRecorder?.register("clear-context-map", { ctx });
+        this.logger?.log("clear-context-map", { ctx });
         this.contextMap.delete(ctx.id);
-        this.eventRecorder?.register("tick-call", { ctx });
+        this.logger?.log("tick-call", { ctx });
         this.tick();
       });
   }
