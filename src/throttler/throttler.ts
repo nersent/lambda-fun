@@ -1,15 +1,11 @@
 import { makeId } from "../utils";
 import { QueueEventRecorder } from "../queue/queue-event-recorder";
-import { Observable } from "../utils/observable";
-
-export interface ThrottlerOptions {
-  time: number;
-  count: number;
-}
-
-export type ThrottlerObserverMap = {
-  resolve: (id: string, error?: any, data?: any) => void;
-};
+import { Observable } from "../observable/observable";
+import {
+  IThrottler,
+  ThrottlerEventMap,
+  ThrottlerOptions,
+} from "./throttler-types";
 
 export interface ThrottlerQueueEntry {
   id: string;
@@ -40,7 +36,10 @@ export type ThrottlerEventRecorderType =
   | "execute-tick-call"
   | "reset-batch-request";
 
-export class Throttler extends Observable<ThrottlerObserverMap> {
+export class Throttler
+  extends Observable<ThrottlerEventMap>
+  implements IThrottler
+{
   private queue: ThrottlerQueueEntry[] = [];
 
   private batch: ThrottlerBatchEntry[] = [];
@@ -206,7 +205,7 @@ export class Throttler extends Observable<ThrottlerObserverMap> {
     this.emit("resolve", batchEntry.id, error, res);
   }
 
-  public async execute(fn: (...args: any[]) => any) {
+  public async execute<T>(fn: (...args: any[]) => T): Promise<Awaited<T>> {
     const id = this.enqueue(fn);
 
     const promise = new Promise<any>(async (resolve, reject) => {

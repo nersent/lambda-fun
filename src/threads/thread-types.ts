@@ -1,33 +1,3 @@
-import { Observable } from "../utils/observable";
-
-export interface IThreadManager extends Observable<ThreadManagerObserverMap> {
-  /**
-   * Returns the number of total usable threads.
-   */
-  getThreadsCount(): number;
-  /**
-   * Sets the number of total usable threads.
-   */
-  setThreadsCount(count: number): Promise<void>;
-  getThreads(): IThread[];
-  getThread(id: string): IThread | undefined;
-  createThread(): Promise<IThread> | IThread;
-  deleteThread(id: string): Promise<void> | void;
-  /**
-   * Returns a thread that can be executed.
-   */
-  findExecutableThread(ctx: Record<string, any>): IThread | undefined;
-  /**
-   * Removes non running threads marked with killed status.
-   */
-  flush(): Promise<void>;
-}
-
-export type ThreadManagerObserverMap = {
-  createThread: (id: string) => Promise<void> | void;
-  deleteThread: (id: string) => Promise<void> | void;
-};
-
 export interface IThread {
   getId(): string;
   getStatus(): ThreadStatus;

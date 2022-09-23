@@ -1,6 +1,4 @@
-import { Observable } from "../utils/observable";
-
-export interface Queue extends Observable<QueueObserverMap> {
+export interface IQueue {
   /**
    * Enqueues single function and returns the handle.
    */
@@ -33,7 +31,7 @@ export interface Queue extends Observable<QueueObserverMap> {
   exists(id: string): boolean;
 }
 
-export type QueueObserverMap = {
+export type QueueEventMap = {
   enqueue: (data: any) => Promise<void> | void;
   pause: (id: string, reason?: any) => Promise<void> | void;
   resume: (id: string, reason?: any) => Promise<void> | void;
@@ -46,7 +44,7 @@ export type QueueObserverMap = {
 };
 
 export type QueueResolveEvent<T> =
-  | { id: string; queue: Queue; isCanceled: boolean } & (
+  | { id: string; queue: IQueue; isCanceled: boolean } & (
       | {
           data: T;
         }

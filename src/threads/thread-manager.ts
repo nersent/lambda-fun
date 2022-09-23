@@ -1,14 +1,10 @@
-import { Observable } from "../utils/observable";
+import { Observable } from "../observable/observable";
 import { Thread } from "./thread";
-import {
-  IThread,
-  IThreadManager,
-  ThreadManagerObserverMap,
-  ThreadStatus,
-} from "./thread-types";
+import { IThreadManager, ThreadManagerEventMap } from "./thread-manager-types";
+import { IThread, ThreadStatus } from "./thread-types";
 
 export class ThreadManager
-  extends Observable<ThreadManagerObserverMap>
+  extends Observable<ThreadManagerEventMap>
   implements IThreadManager
 {
   private threadMap = new Map<string, IThread>();

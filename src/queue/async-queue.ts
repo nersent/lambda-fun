@@ -1,3 +1,4 @@
+import { Observable } from "../observable/observable";
 import { IThread, IThreadManager } from "../threads/thread-types";
 import { makeId } from "../utils";
 import { QueueEventRecorder } from "./queue-event-recorder";
@@ -10,7 +11,6 @@ import {
   QueuePauseReason,
   QueueResolveEvent,
 } from "./queue-types";
-import { Observable } from "../utils/observable";
 
 export interface AsyncQueueEntry {
   id: string;
