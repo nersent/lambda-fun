@@ -18,6 +18,7 @@ export type ThreadifierOnErrorOptions = { printCurrentResponses?: boolean } & (
   | {
       exitProcess?: boolean;
     }
+  | { returnUndefined?: boolean }
 );
 
 export interface ThreadifierDelegates {
@@ -85,12 +86,17 @@ export class Threadifier extends Observable<ThreadifierEventMap> {
   protected handleQueueExecution = (ctx: ThreadifierQueueExecutionContext) => {
     const {
       data: { fn },
+      threadId,
     } = ctx;
     return wrapFunction(
       fn,
       this.delegates.throttler?.execute?.bind(this.delegates.throttler),
       this.delegates.repeater?.execute?.bind(this.delegates.repeater),
-    )();
+    )({
+      threadIndex: this.threadPool
+        .getThreads()
+        .findIndex((r) => r.getId() === threadId),
+    });
     // return wrapFunction(fn, ...(this.delegates.getWrappers?.(ctx) ?? []))();
   };
 
@@ -132,7 +138,14 @@ export class Threadifier extends Observable<ThreadifierEventMap> {
           this.queue.clear();
           clearListeners();
           reject(error);
-          return;
+          return false;
+        }
+
+        if (
+          "returnUndefined" in this.options.onError &&
+          this.options.onError.returnUndefined
+        ) {
+          return true;
         }
 
         if (
@@ -142,19 +155,23 @@ export class Threadifier extends Observable<ThreadifierEventMap> {
           console.error(error);
           process.exit(1);
         }
+
+        return false;
       };
 
       const onResolve = (e: QueueResolveEvent<any>) => {
         this.current++;
-        if ("error" in e && !e.isCanceled) return handleError(e.error);
-        if ("data" in e) {
-          this.responses.push(e.data);
-          this.emit("resolve", {
-            data: e.data,
-            current: this.current,
-            total: this.total,
-          });
+        if ("error" in e && !e.isCanceled) {
+          const proceed = handleError(e.error);
+          if (!proceed) return;
         }
+
+        this.responses.push((e as any).data);
+        this.emit("resolve", {
+          data: (e as any).data,
+          current: this.current,
+          total: this.total,
+        });
       };
 
       const onFinish = () => {
