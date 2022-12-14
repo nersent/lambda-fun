@@ -1,5 +1,6 @@
 import { EventRegistryBase } from "@nersent/event-emitter";
 
+import { ThreadManager } from "./thread-manager-types";
 import { Thread, ThreadResponse } from "./thread-types";
 
 export type ThreadPoolEvents = {
@@ -13,6 +14,7 @@ export type ThreadPoolEventRegistry = EventRegistryBase<ThreadPoolEvents>;
  * Manages a pool of threads.
  */
 export interface ThreadPool extends ThreadPoolEventRegistry {
+  getThreadManager(): ThreadManager;
   /**
    * Returns the number of total usable threads.
    */
@@ -20,10 +22,6 @@ export interface ThreadPool extends ThreadPoolEventRegistry {
   /**
    * Creates or destroys threads to match the given size, then initializes them.
    */
-  setSize(count: number): Promise<void>;
-  run<T>(data: any): Promise<ThreadResponse<T> | undefined>;
-  /**
-   * Handles killed threads.
-   */
-  flush(): Promise<void>;
+  resize(count: number): Promise<void>;
+  getAvailableThread(): Thread | undefined;
 }

@@ -1,23 +1,21 @@
 import { EventEmitter, EventRegistry } from "@nersent/event-emitter";
-import {
-  ThreadManagerEvents,
-  ThreadManager as IThreadManager,
-} from "./thread-manager-types";
+import { ThreadManagerEvents, ThreadManager } from "./thread-manager-types";
 import { Thread } from "./thread-types";
 
-export class ThreadManager
+export class ThreadManagerImpl
   extends EventRegistry<ThreadManagerEvents>
-  implements IThreadManager
+  implements ThreadManager
 {
   protected readonly emitter = new EventEmitter<ThreadManagerEvents>(this);
 
   protected threads = new Map<number, Thread>();
 
-  protected killedTreads = new Set<number>();
+  protected reservedThreads = new Map<Thread, any>();
 
   constructor(
     private readonly createThreadsDelegate: (
       count: number,
+      threadManagr: ThreadManager,
     ) => Promise<Thread[]> | Thread[],
   ) {
     super();
@@ -35,8 +33,27 @@ export class ThreadManager
     return this.threads.has(threadId);
   }
 
+  public reserveThread(thread: Thread, handle: any): void {
+    this.reservedThreads.set(thread, handle);
+  }
+
+  public isThreadReserved(thread: Thread): boolean {
+    return this.reservedThreads.has(thread);
+  }
+
+  public releaseThread(thread: Thread): void {
+    this.reservedThreads.delete(thread);
+  }
+
+  public getReservedThreadHandle(thread: Thread) {
+    if (this.getReservedThreadHandle(thread) == null) {
+      throw new Error(`Thread ${thread.getId()} is not reserved.`);
+    }
+    return this.reservedThreads.get(thread);
+  }
+
   public async createThreads(count: number = 1): Promise<Thread[]> {
-    const threads = await this.createThreadsDelegate(count);
+    const threads = await this.createThreadsDelegate(count, this);
     for (const thread of threads) {
       this.threads.set(thread.getId(), thread);
     }

@@ -19,6 +19,10 @@ export interface ThreadManager extends ThreadManagerEventRegistry {
   hasThread(threadId: number): boolean;
   createThreads(count?: number): Promise<Thread[]>;
   deleteThreads(...threadIds: (number | Thread)[]): Promise<void>;
+  reserveThread(thread: Thread, handle: any | undefined): void;
+  isThreadReserved(thread: Thread): boolean;
+  getReservedThreadHandle(thread: Thread): any | undefined;
+  releaseThread(thread: Thread): void;
   /**
    * Kills and deletes all threads.
    */

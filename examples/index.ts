@@ -1,21 +1,11 @@
-import { useQueueNetworkAbortExample } from "./queue/network-abort";
-import { useQueuePauseResumeExample } from "./queue/pause-resume";
-import { useThreadifyMessageExample } from "./threadify/message";
-import { useThreadifyRetryExample } from "./threadify/retry";
-import { useThreadifyTimeoutExample } from "./threadify/timeout";
-import { useThreadifyThrottleExample } from "./threadify/throttle";
-import { useThrottleExample } from "./throttle/throttle";
-import { useThreadifyRetryAndThrottleExample } from "./threadify/retry-and-throttle";
+import { useNetworkAbortExample } from "./example-network-abort";
+import { useQueueThrottleExample } from "./example-queue-throttle";
+import { useTimeoutExample } from "./example-timeout";
 
 const main = async () => {
-  // await useQueueNetworkAbortExample();
-  // await useQueuePauseResumeExample();
-  // await useThreadifyMessageExample();
-  // await useThreadifyTimeoutExample();
-  // await useThreadifyRetryExample();
-  // await useThreadifyThrottleExample();
-  await useThreadifyRetryAndThrottleExample();
-  // await useThrottleExample();
+  // await useTimeoutExample();
+  await useNetworkAbortExample();
+  // await useQueueThrottleExample();
 };
 
 process.on("exit", function () {

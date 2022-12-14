@@ -1,7 +1,7 @@
 import "jest";
 import { FunctionThread } from "../function-thread";
-import { ThreadManager } from "../thread-manager";
-import { ThreadPool } from "../thread-pool";
+import { ThreadManagerImpl } from "../thread-manager-impl";
+import { ThreadPoolImpl } from "../thread-pool-impl";
 import { ThreadStatus } from "../thread-types";
 
 interface TestThreadData {
@@ -9,14 +9,14 @@ interface TestThreadData {
   status: ThreadStatus;
   isAlive?: boolean;
   isInitialized?: boolean;
-  isDirty?: boolean;
 }
 
 const createThreadManager = (...items: TestThreadData[]) => {
-  let currentId = 0;
-  const threadManager = new ThreadManager((count: number) => {
+  const threadManager = new ThreadManagerImpl((count, tm) => {
     return Array.from({ length: count }).map((_, index) => {
-      return new FunctionThread(index + currentId++);
+      return new FunctionThread(
+        index + tm.getThreads().reverse()[0]!.getId() + 1,
+      );
     });
   });
 
@@ -33,17 +33,7 @@ const createThreadManager = (...items: TestThreadData[]) => {
 
 const createThreadPool = (...items: TestThreadData[]) => {
   const threadManager = createThreadManager(...items);
-  const threadPool = new ThreadPool(threadManager);
-
-  for (const item of items) {
-    if (item.isDirty) {
-      const thread = threadManager.getThread(item.id);
-      if (thread == null) {
-        throw new Error(`Test thread ${item.id} not found`);
-      }
-      threadPool["dirtyThreads"].add(thread);
-    }
-  }
+  const threadPool = new ThreadPoolImpl(threadManager);
 
   return threadPool;
 };
@@ -52,26 +42,26 @@ describe("ThreadPool", () => {
   describe("[private] findRunnableThread", () => {
     it("finds runnable thread", async () => {
       {
-        const tp = new ThreadPool(
+        const tp = new ThreadPoolImpl(
           createThreadManager(
             {
               id: 1,
               status: ThreadStatus.None,
-              isDirty: false,
+              isAlive: true,
               isInitialized: true,
             },
             {
               id: 2,
               status: ThreadStatus.None,
-              isDirty: false,
+              isAlive: true,
               isInitialized: true,
             },
           ),
         );
-        expect(tp["findRunnableThread"]()?.getId()).toEqual(1);
+        expect(tp["getAvailableThread"]()?.getId()).toEqual(1);
       }
       {
-        const tp = new ThreadPool(
+        const tp = new ThreadPoolImpl(
           createThreadManager(
             {
               id: 1,
@@ -87,10 +77,10 @@ describe("ThreadPool", () => {
             },
           ),
         );
-        expect(tp["findRunnableThread"]()?.getId()).toEqual(2);
+        expect(tp["getAvailableThread"]()?.getId()).toEqual(2);
       }
       {
-        const tp = new ThreadPool(
+        const tp = new ThreadPoolImpl(
           createThreadManager(
             {
               id: 1,
@@ -106,10 +96,10 @@ describe("ThreadPool", () => {
             },
           ),
         );
-        expect(tp["findRunnableThread"]()?.getId()).toEqual(2);
+        expect(tp["getAvailableThread"]()?.getId()).toEqual(2);
       }
       {
-        const tp = new ThreadPool(
+        const tp = new ThreadPoolImpl(
           createThreadManager(
             {
               id: 1,
@@ -125,10 +115,10 @@ describe("ThreadPool", () => {
             },
           ),
         );
-        expect(tp["findRunnableThread"]()?.getId()).toEqual(2);
+        expect(tp["getAvailableThread"]()?.getId()).toEqual(2);
       }
       {
-        const tp = new ThreadPool(
+        const tp = new ThreadPoolImpl(
           createThreadManager(
             {
               id: 1,
@@ -144,10 +134,10 @@ describe("ThreadPool", () => {
             },
           ),
         );
-        expect(tp["findRunnableThread"]()?.getId()).toEqual(undefined);
+        expect(tp["getAvailableThread"]()?.getId()).toEqual(undefined);
       }
       {
-        const tp = new ThreadPool(
+        const tp = new ThreadPoolImpl(
           createThreadManager(
             {
               id: 1,
@@ -163,10 +153,10 @@ describe("ThreadPool", () => {
             },
           ),
         );
-        expect(tp["findRunnableThread"]()?.getId()).toEqual(undefined);
+        expect(tp["getAvailableThread"]()?.getId()).toEqual(undefined);
       }
       {
-        const tp = new ThreadPool(
+        const tp = new ThreadPoolImpl(
           createThreadManager(
             {
               id: 1,
@@ -182,83 +172,47 @@ describe("ThreadPool", () => {
             },
           ),
         );
-        expect(tp["findRunnableThread"]()?.getId()).toEqual(2);
+        expect(tp["getAvailableThread"]()?.getId()).toEqual(2);
       }
     });
   });
 
-  describe("setSize", () => {
-    describe("if count is more than thread manager count, then creates additional threads and marks as available", () => {
-      it("supports all available threads", async () => {
-        const tp = new ThreadPool(
-          createThreadManager({
-            id: 1,
-            status: ThreadStatus.None,
-            isAlive: true,
-            isInitialized: true,
-          }),
-        );
-        await tp.setSize(2);
-        const dirtyThreads = tp["getDirtyThreads"]();
-        expect(dirtyThreads.length).toEqual(0);
+  describe("resize", () => {
+    it("creates additional threads", async () => {
+      const tp = createThreadPool({
+        id: 1,
+        status: ThreadStatus.None,
+        isAlive: true,
+        isInitialized: true,
       });
-
-      it("supports killed threads", async () => {
-        const tp = new ThreadPool(
-          createThreadManager(
-            {
-              id: 1,
-              status: ThreadStatus.None,
-              isAlive: true,
-              isInitialized: true,
-            },
-            {
-              id: 2,
-              status: ThreadStatus.None,
-              isAlive: false,
-              isInitialized: true,
-            },
-          ),
-        );
-        await tp.setSize(3);
-        const dirtyThreads = tp["getDirtyThreads"]();
-        expect(dirtyThreads.length).toEqual(0);
-      });
+      await tp.resize(2);
+      const threads = tp.getThreadManager().getThreads();
+      expect(threads.length).toEqual(2);
+      expect(threads[0].getId()).toEqual(1);
+      expect(threads[1].getId()).toEqual(2);
     });
 
-    describe("if count is less than thread manager count, then marks threads as killed", () => {
-      describe("are threads are not executing", () => {
-        it("all threads are available", async () => {
-          const tp = new ThreadPool(
-            createThreadManager(
-              {
-                id: 1,
-                status: ThreadStatus.None,
-                isAlive: true,
-                isInitialized: true,
-              },
-              {
-                id: 2,
-                status: ThreadStatus.None,
-                isAlive: true,
-                isInitialized: true,
-              },
-              {
-                id: 3,
-                status: ThreadStatus.None,
-                isAlive: true,
-                isInitialized: true,
-              },
-            ),
-          );
-          await tp.setSize(1);
-          const dirtyThreads = tp["getDirtyThreads"]();
-          expect(dirtyThreads.length).toEqual(2);
-          expect(tp["isThreadDirty"](1)).toEqual(true);
-          expect(tp["isThreadDirty"](2)).toEqual(true);
-          expect(tp["isThreadDirty"](3)).toEqual(false);
-        });
-      });
+    it("kills threads", async () => {
+      const tp = createThreadPool(
+        {
+          id: 1,
+          status: ThreadStatus.Pending,
+          isAlive: true,
+          isInitialized: true,
+        },
+        {
+          id: 2,
+          status: ThreadStatus.None,
+          isAlive: true,
+          isInitialized: true,
+        },
+      );
+      await tp.resize(1);
+      const tm = tp.getThreadManager();
+      const threads = tm.getThreads();
+      expect(threads.length).toEqual(1);
+      expect(tm.getThread(1)).toEqual(undefined);
+      expect(tm.getThread(2)!.isAlive()).toEqual(true);
     });
   });
 });
