@@ -25,7 +25,7 @@ export type TaskQueueHandlerResponse =
     };
 
 export interface TaskQueue extends TaskQueueEventRegistry {
-  enqueue(data: any): Task;
+  enqueue<T>(data: T): Task;
   getTasks(): Task[];
   isBusy(): boolean;
   lock(): void;

@@ -16,6 +16,14 @@ type TaskQueueInternalEvents = {
   resolve: (res: TaskResponse) => void;
 };
 
+export interface TaskQueueImplOptions {
+  throwOnError?: boolean;
+}
+
+export const TASK_QUEUE_IMPL_DEFAULT_OPTIONS: Partial<TaskQueueImplOptions> = {
+  throwOnError: true,
+};
+
 export class TaskQueueImpl
   extends EventRegistry<TaskQueueEvents>
   implements ITaskQueue
@@ -32,10 +40,16 @@ export class TaskQueueImpl
 
   private readonly processedTasks: Task[] = [];
 
+  private readonly options: TaskQueueImplOptions;
+
   private _isLocked = false;
 
-  constructor(private readonly delegates: TaskQueueImplDelegates) {
+  constructor(
+    private readonly delegates: TaskQueueImplDelegates,
+    options: TaskQueueImplOptions = {},
+  ) {
     super();
+    this.options = { ...TASK_QUEUE_IMPL_DEFAULT_OPTIONS, ...options };
   }
 
   public lock() {
@@ -91,7 +105,7 @@ export class TaskQueueImpl
     return task;
   }
 
-  public enqueue(data: any): Task {
+  public enqueue<T>(data: T): Task {
     const task = this.createTask(data);
     this.taskQueue.push(task);
     return task;
@@ -112,7 +126,7 @@ export class TaskQueueImpl
       return;
     }
 
-    if (this.taskQueue.length === 0) {
+    if (this.taskQueue.length === 0 && this.processedTasks.length === 0) {
       this.emitter.emit("empty");
       return;
     }
@@ -151,13 +165,15 @@ export class TaskQueueImpl
       taskRes = { data, task };
     } catch (error) {
       taskRes = { error, task };
-      throw error;
     } finally {
       if (taskRes == null) {
         throw new Error("Task response is invalid");
       }
       const processQueueIndex = this.processedTasks.indexOf(task);
       this.processedTasks.splice(processQueueIndex, 1);
+      if ("error" in taskRes && this.options.throwOnError) {
+        throw taskRes.error;
+      }
       await this.emitter.emitAsync("resolve", taskRes);
       await this.internalEventEmitter.emitAsync("resolve", taskRes);
       this.tick();
