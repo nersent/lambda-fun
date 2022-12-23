@@ -141,7 +141,7 @@ export class TaskImpl implements Task {
     return this.resumeHandler;
   }
 
-  public setMetadata<T>(metadata: T): Task {
+  public setMetadata<T>(metadata?: T): Task {
     this.metadata = metadata;
     return this;
   }

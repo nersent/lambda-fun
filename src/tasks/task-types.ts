@@ -45,7 +45,7 @@ export interface Task {
   pause(reason?: PauseReason): Promise<void>;
   resume(reason?: ResumeReason): Promise<void>;
   getMetadata<T>(): T | undefined;
-  setMetadata<T>(metadata: T): Task;
+  setMetadata<T>(metadata?: T): Task;
   setCancelHandler(handler: TaskCancelHandler): Task;
   setPauseHandler(handler: TaskPauseHandler): Task;
   setResumeHandler(handler: TaskResumeHandler): Task;

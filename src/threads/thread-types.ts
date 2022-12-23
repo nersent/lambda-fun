@@ -24,6 +24,8 @@ export interface Thread {
   isAlive(): boolean;
   isRunning(): boolean;
   initialize(): Promise<void>;
+  setMetadata<T>(metadata?: T): Thread;
+  getMetadata<T>(): T | undefined;
   run<T>(data: any): Promise<ThreadResponse<T>>;
   kill: () => Promise<void>;
 }

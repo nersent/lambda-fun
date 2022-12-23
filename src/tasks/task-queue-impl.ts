@@ -21,7 +21,7 @@ export interface TaskQueueImplOptions {
 }
 
 export const TASK_QUEUE_IMPL_DEFAULT_OPTIONS: Partial<TaskQueueImplOptions> = {
-  throwOnError: true,
+  throwOnError: false,
 };
 
 export class TaskQueueImpl

@@ -16,3 +16,5 @@ export * from "./threads/threads-utils";
 export * from "./threads/thread-pool-impl";
 export * from "./threads/thread-scheduler-types";
 export * from "./threads/thread-scheduler-impl";
+
+export * from "./eta";

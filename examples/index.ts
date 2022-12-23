@@ -4,7 +4,7 @@ import { useTimeoutExample } from "./example-timeout";
 
 const main = async () => {
   // await useTimeoutExample();
-  await useNetworkAbortExample();
+  // await useNetworkAbortExample();
   // await useQueueThrottleExample();
 };
 

@@ -12,6 +12,8 @@ export class FunctionThread<T extends (...args: any[]) => any>
 
   protected status: ThreadStatus = ThreadStatus.None;
 
+  protected metadata: any | undefined = undefined;
+
   constructor(private readonly id: number) {}
 
   public getId(): number {
@@ -61,5 +63,14 @@ export class FunctionThread<T extends (...args: any[]) => any>
       this.status = ThreadStatus.Rejected;
       return { error };
     }
+  }
+
+  public setMetadata<K>(metadata?: K): FunctionThread<T> {
+    this.metadata = metadata;
+    return this;
+  }
+
+  public getMetadata<K>(): K | undefined {
+    return this.metadata;
   }
 }

@@ -31,13 +31,15 @@ export class ThreadSchedulerImpl implements ThreadScheduler {
       resolver: () =>
         thread.run(task.getData()).then((threadRes) => {
           threadManager.releaseThread(thread);
-          if ("error" in threadRes) throw threadRes.error;
+          if ("error" in threadRes) {
+            throw threadRes.error;
+          }
           return threadRes.data;
         }),
     };
   };
 
-  public schedule(data: any): Task {
+  public schedule<T>(data: T): Task {
     const task = this.taskQueue.enqueue(data);
     return task;
   }
