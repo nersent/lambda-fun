@@ -1,6 +1,6 @@
 {
   "name": "@nersent/lambda-fun",
-  "version": "1.0.0-dev.2",
+  "version": "1.0.0-dev.10",
   "main": "build/src/index.js",
   "types": "build/src/index.d.ts",
   "files": [
