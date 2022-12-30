@@ -1,13 +1,9 @@
-import { createTask } from "../src/threading/tasks/task-factory";
 import {
-  IThread,
-  ThreadExecutionContext,
-} from "src/threading/threads/thread-types";
-import { TaskDelegate } from "../src/threading/tasks/task-types";
-import { ResizableThreadPool } from "../src/threading/threads/resizable-thread-pool";
-import { Thread } from "../src/threading/threads/thread";
-import { createThread } from "../src/threading/threads/thread-factory";
-import { ThreadScheduler } from "../src/threading/threads/thread-scheduler";
+  createTask,
+  createThread,
+  ResizableThreadPool,
+  ThreadScheduler,
+} from "../src";
 import { delay } from "./utils";
 
 interface ExampleEntry {

@@ -1,6 +1,5 @@
+import { threadify, createThreadScheduler, createThreadPool } from "../src";
 import { delay } from "./utils";
-import { threadify } from "../src/threading/threadify";
-import { createThreadScheduler } from "../src/threading/threads/thread-scheduler-factory";
 
 export const useThreadifyExample = async () => {
   const fn = async (message: string, time: number): Promise<void> => {
@@ -8,7 +7,9 @@ export const useThreadifyExample = async () => {
     console.log(message);
   };
 
-  const factory = threadify(fn, await createThreadScheduler(1));
+  const threadPool = await createThreadPool(2);
+  const threadScheduler = createThreadScheduler(threadPool);
+  const factory = threadify(fn, threadScheduler);
 
   await Promise.all([
     factory("a", 1000),

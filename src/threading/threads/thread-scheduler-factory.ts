@@ -1,13 +1,11 @@
-import { ResizableThreadPool } from "./resizable-thread-pool";
-import { createThread } from "./thread-factory";
+import { IThreadManager } from "./thread-manager-types";
 import { ThreadScheduler } from "./thread-scheduler";
 
-export const createThreadScheduler = async <T>(poolSize: number) => {
-  const threadPool = new ResizableThreadPool<T>(() => createThread());
-  await threadPool.resize(poolSize);
-
+export const createThreadScheduler = <T = any>(
+  threadManager: IThreadManager<T>,
+) => {
   const threadScheduler = new ThreadScheduler<T>(
-    (task, scheduler) => threadPool.getRunnableThread()?.lock(scheduler),
+    (task, scheduler) => threadManager.getRunnableThread()?.lock(scheduler),
     (task, thread) => thread.unlock(),
   );
 

@@ -3,6 +3,7 @@
 // import { xd } from "./xd";
 
 import { useNetworkAbortExample } from "./example-network-abort";
+import { useRepeatExample } from "./example-repeat";
 import { useThreadifyExample } from "./example-threadify";
 
 const main = async () => {
@@ -11,7 +12,8 @@ const main = async () => {
   // await useQueueThrottleExample();
   // await xd();
   // await useNetworkAbortExample();
-  await useThreadifyExample();
+  // await useThreadifyExample();
+  await useRepeatExample();
 };
 
 process.on("exit", function () {
