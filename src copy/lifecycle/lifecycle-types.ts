@@ -1,4 +1,4 @@
-import { CancelReason, PauseReason } from "./lifecycle-exceptions";
+import { PauseReason } from "./lifecycle-exceptions";
 
 export type PausedResponse =
   | { isPaused: false }
@@ -11,7 +11,7 @@ export type CanceledResponse =
   | { isCanceled: false }
   | {
       isCanceled: true;
-      reason: CancelReason;
+      reason: any;
     };
 
 export type LifecycleDataResponse<T> = {
