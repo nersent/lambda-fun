@@ -1,7 +1,6 @@
 import { EventEmitter, EventRegistry } from "@nersent/event-emitter";
-import { ICancelToken } from "src/lifecycle/cancel-token-types";
 
-import { ITask, TaskExecutionContext } from "../tasks/task-types";
+import { ITask } from "../tasks/task-types";
 
 import { IThreadScheduler } from "./thread-scheduler-types";
 import { IThread, ThreadExecutionContext } from "./thread-types";
