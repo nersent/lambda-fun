@@ -32,13 +32,6 @@ export class ThreadManager<T> implements IThreadManager<T> {
   }
 
   public getRunnableThread(): IThread<T> | undefined {
-    const threads = this.getAll();
-    for (const thread of threads) {
-      if (thread.isLocked()) continue;
-      if (!thread.isAlive()) continue;
-      if (thread.isRunning()) continue;
-      return thread;
-    }
-    return undefined;
+    return this.getAll().find((r) => r.canRun());
   }
 }

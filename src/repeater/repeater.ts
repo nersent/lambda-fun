@@ -15,6 +15,7 @@ export const repeat = async <
 >(
   delegate: T,
   options: RepeaterOptions,
+  breakDelegate?: (error: any) => boolean,
 ): Promise<ReturnType<T>> => {
   let currentAttempt = 1;
   let lastError: any = undefined;
@@ -33,6 +34,9 @@ export const repeat = async <
           `Max attempts exceeded (${options.maxAttempts})`,
           error,
         );
+      }
+      if (breakDelegate?.(error)) {
+        throw error;
       }
       lastError = error;
     }

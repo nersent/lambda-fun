@@ -45,7 +45,7 @@ export class ResizableThreadPool<T> extends ThreadManager<T> {
       const createdThreads = await Promise.all(
         Array.from({ length: additionalSize }, async () => {
           const thread = this.createThreadDelegate();
-          await thread.initialize();
+          await thread.init();
           this.add(thread);
         }),
       );

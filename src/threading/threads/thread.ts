@@ -26,7 +26,7 @@ export class Thread<T = void> implements IThread<T> {
     return this.id;
   }
 
-  public initialize(): void {
+  public init(): void {
     this._isInitialized = true;
     this._isAlive = true;
   }
@@ -52,7 +52,7 @@ export class Thread<T = void> implements IThread<T> {
   }
 
   public canRun(): boolean {
-    return this.isAlive() && !this.isRunning();
+    return !this.isLocked() && this.isAlive() && !this.isRunning();
   }
 
   public async run(task: ITask<T, ThreadExecutionContext<T>>): Promise<T> {

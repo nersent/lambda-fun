@@ -9,7 +9,7 @@ export interface IThread<T = void> {
   /**
    * Initializes thread.
    */
-  initialize(): Promise<void> | void;
+  init(): Promise<void> | void;
   isInitialized(): boolean;
   /**
    * Indicates that thread is initialized and not kilpled.
