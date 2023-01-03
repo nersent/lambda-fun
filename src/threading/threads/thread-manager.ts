@@ -32,6 +32,6 @@ export class ThreadManager<T> implements IThreadManager<T> {
   }
 
   public getRunnableThread(): IThread<T> | undefined {
-    return this.getAll().find((r) => r.canRun());
+    return this.getAll().find((r) => r.canRun() && !r.isLocked());
   }
 }

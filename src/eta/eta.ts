@@ -5,7 +5,7 @@ export class ETA {
 
   private current = 0;
 
-  private startTime = 0;
+  private startTime: number | undefined = undefined;
 
   public start(): ETA {
     this.startTime = Date.now();
@@ -34,6 +34,9 @@ export class ETA {
    * Returns elapsed time in seconds
    */
   public getElapsed(): number {
+    if (this.startTime == null) {
+      throw new Error("Start time is not set");
+    }
     return (Date.now() - this.startTime) / 1000;
   }
 

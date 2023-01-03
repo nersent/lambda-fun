@@ -95,6 +95,7 @@ export class ThreadScheduler<T = void> implements IThreadScheduler<T> {
 
       const thread = this.getThreadDelegate(task, this);
       if (thread == null) break;
+      thread.lock(this);
 
       this.taskQueue.splice(taskIndex, 1);
       this.processedTasks.set(task, thread);
@@ -116,6 +117,7 @@ export class ThreadScheduler<T = void> implements IThreadScheduler<T> {
     }
     this.processedTasks.delete(task);
     this.processedThreads.delete(thread);
+    thread.unlock();
     this.onResolveDelegate(task, thread);
     this.internalEventEmitter.emit("resolve", task, error, res);
     this.tick();

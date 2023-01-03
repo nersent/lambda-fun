@@ -52,7 +52,7 @@ export class Thread<T = void> implements IThread<T> {
   }
 
   public canRun(): boolean {
-    return !this.isLocked() && this.isAlive() && !this.isRunning();
+    return this.isAlive() && !this.isRunning();
   }
 
   public async run(task: ITask<T, ThreadExecutionContext<T>>): Promise<T> {

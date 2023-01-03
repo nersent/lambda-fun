@@ -1,6 +1,8 @@
 export * from "./eta/eta-utils";
 export * from "./eta/eta";
 
+export * from "./performance/iteration-performance";
+
 export * from "./lifecycle/cancel-token-source";
 export * from "./lifecycle/cancel-token-types";
 export * from "./lifecycle/lifecycle-exceptions";
